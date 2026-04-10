@@ -1,0 +1,12 @@
+*.parquet
+*.csv
+*.xlsx
+*.tsv
+*.rds
+*.txt
+*.xls
+*.html
+*.json
+*.sav
+*.tab
+*.por
