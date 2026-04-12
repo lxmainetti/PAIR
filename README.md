@@ -5,6 +5,7 @@ This project is built on the principles of Open Science, utilizing:
 - OpenPsychometrics Project: Large-scale raw survey data.
 - R Package Ecosystem: Built-in datasets from psychometric packages (e.g., psych, psychTools).
 - Multi-Study Integration: Aggregated open-access data from various clinical and personality research repositories.
+Note that for now data is not available. I am working on a solution to make public access to the raw data possible.
 
 🔄 Project Workflow
 The pipeline follows a modular path from raw text to relational predictions:
