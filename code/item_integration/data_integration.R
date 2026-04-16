@@ -25,6 +25,14 @@ bind_cors <- function(cor_items){
 append_item_list <- function(data, item_wordings) {
   # Generate summary statistics (Mean, SD, Min, Max) for each item
   stats <- data %>%
+    mutate(across(everything(), ~ {
+      # Dynamically find the range of each column
+      orig_min <- min(.x, na.rm = TRUE)
+      orig_max <- max(.x, na.rm = TRUE)
+      
+      # Apply rescaling to a 10-point scale
+      rescale_to_10(.x, orig_min, orig_max)
+    })) %>%
     summarise(across(everything(), list(
       mean = ~ mean(.x, na.rm = TRUE),
       sd   = ~ sd(.x, na.rm = TRUE),
@@ -60,6 +68,11 @@ intercorrelations <- function(data, dic_col, testing = FALSE){
     bind_cors(cor_items)
   else
     cor_items
+}
+
+rescale_to_10 <- function(x, old_min, old_max) {
+  # Formula: ((x - min) / (max - min)) * (new_max - 1) + 1
+  ((x - old_min) / (old_max - old_min)) * (10 - 1) + 1
 }
 
 # ---- Codebook Extraction Utilities ----
@@ -277,28 +290,62 @@ CATI_ASRS <- read_csv(paste0(path_to_scales, "CATI_ASRS/data.csv"), skip = 1) %>
   select(contains("ASRS"), contains("CATI"), -`Education level`)
 intercorrelations(CATI_ASRS, CATI_ASRS_items)
 
-# 
-# # Dataverse Data from Goldberg (2018; https://doi.org/10.7910/DVN/ZNGS1K)
+
+library(haven)
+GAAIS <- haven::read_sav(paste0(path_to_scales, "GAAIS/data.sav")) %>% 
+  select(Pos1:Trust, -starts_with("BLANK")) %>% 
+  select(-c(21:57, 78:87))
+colnames(GAAIS) <- sapply(GAAIS, function(x) attr(x, "label") %||% colnames(GAAIS)[which(sapply(GAAIS, identical, x))])
+GAAIS <- GAAIS %>% zap_labels() %>%      # Removes value labels
+  zap_label() %>%       # Removes the 'label' attribute from columns
+  zap_formats() %>%     # Removes SPSS display formats (e.g., F8.2)
+  zap_widths()
+intercorrelations(GAAIS, colnames(GAAIS))
+
+C_PETS_items <- extract_items_robust(paste0(path_to_scales, "C-PETS", cb))
+C_PETS <- read_csv(paste0(path_to_scales, "C-PETS", data_path), skip = 2) %>% 
+  select(-c(1:4))
+intercorrelations(C_PETS, C_PETS_items)
+
+EPTEPS_items <- extract_items_robust(paste0(path_to_scales, "EPTEPS", cb))
+EPTEPS <- read_csv(paste0(path_to_scales, "EPTEPS", data_path)) %>% 
+  select(UE1:MO5)
+intercorrelations(EPTEPS, EPTEPS_items)
+
+Vanity_Scale_items <- extract_items_robust(paste0(path_to_scales, "Vanity_Scale", cb))
+Vanity_Scale <- read_sav(paste0(path_to_scales, "Vanity_Scale/data.sav")) %>% 
+  select(I1:I22) %>% 
+  zap_formats() %>% 
+  mutate(
+    across(ends_with("R"), ~ 6 - .x)
+  )
+intercorrelations(Vanity_Scale, Vanity_Scale_items) # Already reversed or not?
+
+Vanity_Scale_items
+
+
+
+# Dataverse Data from Goldberg (2018; https://doi.org/10.7910/DVN/ZNGS1K)
 # goldberg_data <- read_table(paste0(path_to_scales, "360_words/data.tab")) %>% select(-ID)
-# goldberg_items <- extract_items_robust(paste0(path_to_scales, "360_words/codebook.txt")) %>% 
+# goldberg_items <- extract_items_robust(paste0(path_to_scales, "360_words/codebook.txt")) %>%
 #   str_to_lower() %>% str_trim()
 # 
-# goldberg_items_std <- tibble(item = goldberg_items) %>% 
-#   mutate(item = paste0("I am ", item)) %>% 
+# goldberg_items_std <- tibble(item = goldberg_items) %>%
+#   mutate(item = paste0("I am ", item)) %>%
 #   dplyr::pull(item)
 # 
 # intercorrelations(goldberg_data, goldberg_items_std)
 # 
 # # Dataverse Data from Saucier (2018; https://doi.org/10.7910/DVN/ZNGS1K)
-# saucier_data <- haven::read_sav(paste0(path_to_scales, "525_words/data.sav")) %>% 
-#   haven::zap_labels() %>% 
+# saucier_data <- haven::read_sav(paste0(path_to_scales, "525_words/data.sav")) %>%
+#   haven::zap_labels() %>%
 #   select(-id)
-# saucier_items <- extract_items_robust(paste0(path_to_scales, "525_words/codebook.txt")) %>% 
-#   str_to_lower() %>% 
+# saucier_items <- extract_items_robust(paste0(path_to_scales, "525_words/codebook.txt")) %>%
+#   str_to_lower() %>%
 #   str_trim()
 # 
-# saucier_items_std <- tibble(item = saucier_items) %>% 
-#   mutate(item = paste0("I am ", item)) %>% 
+# saucier_items_std <- tibble(item = saucier_items) %>%
+#   mutate(item = paste0("I am ", item)) %>%
 #   dplyr::pull(item)
 # 
 # intercorrelations(saucier_data, saucier_items_std)

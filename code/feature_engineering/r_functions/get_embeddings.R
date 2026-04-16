@@ -27,7 +27,7 @@ get_embeddings <- function(model = "qwen3-embedding:8b",
   dir.create(paste0("../../data/clustered_embeddings/", model_safe), showWarnings = FALSE)
   
   # Define embeddings path
-  embeddings_path <- paste0("../../data/raw/", model_safe, "_embeddings_raw.rds")
+  embeddings_path <- paste0("../../data/raw/", model_safe, "/embeddings_raw.rds")
   
   # Create Instruction for qwen3 models if selected; else just give items as input
   if(instruct_model){
@@ -167,7 +167,7 @@ get_embeddings_API <- function(model = "text-embedding-3-large",
   
   # Key list by item and save to disk
   names(embeddings_list) <- items
-  write_rds(embeddings_list, paste0(output_dir, model_safe, "_embeddings_raw.rds"))
+  write_rds(embeddings_list, paste0(output_dir, "/", model_safe, "/embeddings_raw.rds"))
   message("SUCCESS: Embeddings saved to ", output_dir)
   
   return(embeddings_list)

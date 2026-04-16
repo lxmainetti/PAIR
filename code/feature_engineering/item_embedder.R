@@ -30,4 +30,5 @@ item_embeddings_df <- as.data.frame(do.call(rbind, embeddings)) %>%
   rename_with(~ str_replace(.x, "V", "emb"))
 
 # Export item_list with each items embeddings to disk
-write_parquet(item_embeddings_df, paste0("../../data/raw/", model_safe, "_embeddings_raw.parquet"))
+dir.create(paste0("../../data/raw/", model_safe))
+write_parquet(item_embeddings_df, paste0("../../data/raw/", model_safe, "/embeddings_raw.parquet"))
