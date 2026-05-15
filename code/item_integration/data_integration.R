@@ -282,7 +282,7 @@ intercorrelations(SCL90R, SCL90R_items)
 PSS_items <- extract_items_robust(paste0(path_to_scales, "PSS", cb))
 PSS <- read_csv(paste0(path_to_scales, "PSS/data.csv")) %>% 
   mutate(across(everything(), as.numeric))
-intercorrelations(SCL90R, SCL90R_items)
+intercorrelations(PSS, PSS_items)
 
 # Comprehensive Autistic Inventory and Adult ADHD Self-Report Scale https://osf.io/qtngb/overview
 CATI_ASRS_items <- extract_items_robust(paste0(path_to_scales, "CATI_ASRS", cb))
@@ -319,37 +319,22 @@ Vanity_Scale <- read_sav(paste0(path_to_scales, "Vanity_Scale/data.sav")) %>%
   mutate(
     across(ends_with("R"), ~ 6 - .x)
   )
-intercorrelations(Vanity_Scale, Vanity_Scale_items) # Already reversed or not?
+intercorrelations(Vanity_Scale, Vanity_Scale_items) 
 
-Vanity_Scale_items
+MSSCQ_items <- extract_items_robust(paste0(path_to_scales, "MSSCQ", cb))
+MSSCQ <- read_tsv(paste0(path_to_scales, "MSSCQ", data_path)) %>% 
+  select(starts_with("Q"))
+intercorrelations(MSSCQ, MSSCQ_items)
 
+HSNS_DD_items <- extract_items_robust(paste0(path_to_scales, "HSNS+DD", cb))
+HSNS_DD <- read_tsv(paste0(path_to_scales, "HSNS+DD", data_path)) %>% 
+  select(starts_with("H"), starts_with("D"))
+intercorrelations(HSNS_DD, HSNS_DD_items)
 
-
-# Dataverse Data from Goldberg (2018; https://doi.org/10.7910/DVN/ZNGS1K)
-# goldberg_data <- read_table(paste0(path_to_scales, "360_words/data.tab")) %>% select(-ID)
-# goldberg_items <- extract_items_robust(paste0(path_to_scales, "360_words/codebook.txt")) %>%
-#   str_to_lower() %>% str_trim()
-# 
-# goldberg_items_std <- tibble(item = goldberg_items) %>%
-#   mutate(item = paste0("I am ", item)) %>%
-#   dplyr::pull(item)
-# 
-# intercorrelations(goldberg_data, goldberg_items_std)
-# 
-# # Dataverse Data from Saucier (2018; https://doi.org/10.7910/DVN/ZNGS1K)
-# saucier_data <- haven::read_sav(paste0(path_to_scales, "525_words/data.sav")) %>%
-#   haven::zap_labels() %>%
-#   select(-id)
-# saucier_items <- extract_items_robust(paste0(path_to_scales, "525_words/codebook.txt")) %>%
-#   str_to_lower() %>%
-#   str_trim()
-# 
-# saucier_items_std <- tibble(item = saucier_items) %>%
-#   mutate(item = paste0("I am ", item)) %>%
-#   dplyr::pull(item)
-# 
-# intercorrelations(saucier_data, saucier_items_std)
-
+SD3_items <- extract_items_robust(paste0(path_to_scales, "SD3", cb))
+SD3 <- read_tsv(paste0(path_to_scales, "SD3", data_path)) %>% 
+  select(-country, -source)
+intercorrelations(SD3, SD3_items)
 
 # ---- FINAL EXPORT ----
 arrow::write_parquet(dat_cors %>% 
@@ -357,3 +342,19 @@ arrow::write_parquet(dat_cors %>%
                      "../../data/raw/item_correlations.parquet")
 arrow::write_parquet(item_list %>% distinct(item, .keep_all = TRUE),
                      "../../data/raw/item_list.parquet")
+
+dat_cors <- tibble()
+item_list <- tibble()
+
+bainbridge_items <- extract_items_robust(paste0(path_to_scales, "Bainbridge", cb))
+bainbridge <- read_csv(paste0(path_to_scales, "Bainbridge", data_path)) %>%  # Unselect doc, nfs scale, nowhere to be found
+  select(-c(ac_1:Consent_T_Click.Count, starts_with("doc"), starts_with("nfs")))
+
+intercorrelations(bainbridge, bainbridge_items)
+
+
+arrow::write_parquet(dat_cors %>% 
+                       distinct(Parameter1, Parameter2, .keep_all = TRUE), 
+                     "../../data/raw/holdout_item_correlations.parquet")
+arrow::write_parquet(item_list %>% distinct(item, .keep_all = TRUE),
+                     "../../data/raw/holdout_item_list.parquet")
