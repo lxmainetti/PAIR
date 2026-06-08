@@ -32,3 +32,5 @@
 | Cognitive Processes in Educational Technology and Pedagogical Scale | C-PETS      | OSF: https://osf.io/4b92d                      | Yoshida, M. (2025, October 26). Raw_Date:Development and Validation of the Creative Personality and Thinking Styles Scale. https://doi.org/10.17605/OSF.IO/4B92D     |
 | Educational Physical Technology  Engagement and Performance Scale | EPTEPS      | OSF: https://osf.io/ayqdw                            | Moudettir, y., Lotfi, S., & Ouhrir, S. (2026, May 17). Technology Acceptance in Moroccan Secondary Physical Education: National Multi-Regional Validation of the EPTEPS Scale (N = 2,456). https://doi.org/10.17605/OSF.IO/AYQDW     |
 | Vanity Scale                                  | —           | OSF: https://osf.io/2vmd8 | LeBel, E. P. (2021, December 2). The vanity construct re-examined: LeBel's vanity scale. Retrieved from osf.io/2vmd8    |
+
+#TODO add bainbridge datasets and Surveybot validation data
