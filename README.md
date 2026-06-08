@@ -9,7 +9,7 @@ The headline result: given just the *text* of two scale items, the model recover
 
 ## 📊 Data sources
 
-This project is built on the principles of Open Science. The training pool aggregates **~32 published psychometric scales** drawn from open-access repositories; the full scale-by-scale list with abbreviations and source URLs lives in [`data/scales/sources.md`](data/scales/sources.md). By provenance:
+This project is built on the principles of Open Science. The training pool aggregates **~32 published psychometric scales** drawn from open-access repositories; the full scale-by-scale list with abbreviations and source URLs lives in [`scale_sources.md`](scale_sources.md). By provenance:
 
 - **`psychTools` R package** (5 scales): Eysenck Personality Inventory (EPI), Big Five Inventory (BFI), Motivational State Questionnaire (MSQ), SAPA Personality Inventory (SPI), and the Athenstaedt Gender-Role Self-Concept scale.
 - **OpenPsychometrics.org** (18 scales): HSQ, Taylor Manifest Anxiety, HEXACO, RIASEC, Consideration of Future Consequences, DASS, ECR, Empathizing/Systemizing Quotient, GCBS, KIMS, MACH-IV, MGKT, NPAS, Rosenberg Self-Esteem, RWAS, Sexual Compulsivity, AMBI, and the 16PF.
