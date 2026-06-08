@@ -1,39 +1,34 @@
-| Scale                                 | Abbreviation                               | Source |
-|---|---|---|
-| Eysenck Personality Inventory                 | EPI         | `psychTools` R package 
-| Big Five Inventory                            | BFI         | `psychTools` R package 
-| Motivational State Questionnaire              | MSQ         | `psychTools` R package 
-| SAPA Personality Inventory                    | SPI         | `psychTools` R package 
-| Athenstaedt Gender Role Self-Concept          | —           | `psychTools` R package 
-| Humor Styles Questionnaire                    | HSQ         | Openpsychometrics.org 
-| Taylor Manifest Anxiety Scale                 | TMA         | Openpsychometrics.org 
-| HEXACO Personality Inventory                  | HEXACO      | Openpsychometrics.org 
-| RIASEC Holland Occupational Themes            | RIASEC      | Openpsychometrics.org 
-| Consideration of Future Consequences Scale    | CFCS        | Openpsychometrics.org 
-| Depression Anxiety Stress Scales              | DASS        | Openpsychometrics.org 
-| Experiences in Close Relationships            | ECR         | Openpsychometrics.org 
-| Empathizing/Systemizing Quotient              | EQSQ        | Openpsychometrics.org 
-| Generic Conspiracist Beliefs Scale            | GCBS        | Openpsychometrics.org 
-| Kentucky Inventory of Mindfulness Skills      | KIMS        | Openpsychometrics.org 
-| Machiavellianism Scale                        | MACH-IV     | Openpsychometrics.org 
-| Multidimensional General Knowledge Test       | MGKT        | Openpsychometrics.org 
-| Narcissistic Personality Adjective Checklist  | NPAS        | Openpsychometrics.org 
-| Rosenberg Self-Esteem Scale                   | RSE         | Openpsychometrics.org 
-| Right-Wing Authoritarianism Scale             | RWAS        | Openpsychometrics.org 
-| Sexual Compulsivity Scale                     | SCS         | Openpsychometrics.org 
-| Self-Efficacy Fragility                       | SEFrag      | Own study — no URL in codebook -> OSF
-| Adult Multidimensional Independence           | AMBI        | Openpsychometrics.org 
-| 16 Personality Factor Questionnaire           | 16PF        | Openpsychometrics.org
-| Personality Inventory for DSM-5               | PID-5       | OSF: https://osf.io/6hwzk 
-| Symptom Checklist 90 Revised                  | SCL-90-R    | OSF: https://osf.io/q5rgb 
-| Psychological Strain Scales                   | PSS         | OSF: https://osf.io/q5rgb 
-| Comprehensive Autistic Inventory              | CATI/ASRS   | OSF: https://osf.io/qtngb 
-    + Adult ADHD Self-Report
-| General Attitudes towards AI Scale            | GAAIS       | https://doi.org/10.1080/10447318.2022.2085400 
-| Cognitive Processes in Educational            | C-PETS      | OSF: https://osf.io/4b92d 
-    Technology and Pedagogical Scale                            
-| Educational Physical Technology               | EPTEPS      | OSF: https://osf.io/ayqdw 
-    Engagement and Performance Scale                                 
-| Vanity Scale                                  | —           | OSF: https://osf.io/2vmd8 
-
-Bainbridge OSF
+| Scale                                 | Abbreviation                               | Source | Citation |
+|---|---|---|---|
+| Eysenck Personality Inventory                 | EPI         | `psychTools` R package | William Revelle (2026). psychTools: Tools to Accompany the 'psych' Package for Psychological Research. Northwestern University, Evanston, Illinois. R package version 2.6.4, https://CRAN.R-project.org/package=psychTools.       |
+| Big Five Inventory                            | BFI         | `psychTools` R package | William Revelle (2026). psychTools: Tools to Accompany the 'psych' Package for Psychological Research. Northwestern University, Evanston, Illinois. R package version 2.6.4, https://CRAN.R-project.org/package=psychTools.       |
+| Motivational State Questionnaire              | MSQ         | `psychTools` R package | William Revelle (2026). psychTools: Tools to Accompany the 'psych' Package for Psychological Research. Northwestern University, Evanston, Illinois. R package version 2.6.4, https://CRAN.R-project.org/package=psychTools.       |
+| SAPA Personality Inventory                    | SPI         | `psychTools` R package | William Revelle (2026). psychTools: Tools to Accompany the 'psych' Package for Psychological Research. Northwestern University, Evanston, Illinois. R package version 2.6.4, https://CRAN.R-project.org/package=psychTools.       |
+| Athenstaedt Gender Role Self-Concept          | —           | `psychTools` R package | William Revelle (2026). psychTools: Tools to Accompany the 'psych' Package for Psychological Research. Northwestern University, Evanston, Illinois. R package version 2.6.4, https://CRAN.R-project.org/package=psychTools.       |
+| Humor Styles Questionnaire                    | HSQ         | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Taylor Manifest Anxiety Scale                 | TMA         | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| HEXACO Personality Inventory                  | HEXACO      | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| RIASEC Holland Occupational Themes            | RIASEC      | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Consideration of Future Consequences Scale    | CFCS        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Depression Anxiety Stress Scales              | DASS        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Experiences in Close Relationships            | ECR         | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Empathizing/Systemizing Quotient              | EQSQ        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Generic Conspiracist Beliefs Scale            | GCBS        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Kentucky Inventory of Mindfulness Skills      | KIMS        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Machiavellianism Scale                        | MACH-IV     | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Multidimensional General Knowledge Test       | MGKT        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Narcissistic Personality Adjective Checklist  | NPAS        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Rosenberg Self-Esteem Scale                   | RSE         | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Right-Wing Authoritarianism Scale             | RWAS        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Sexual Compulsivity Scale                     | SCS         | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Self-Efficacy Fragility                       | SEFrag      | Own study — https://osf.io/deh9a | Pania, L., Mainetti, A., Elson, M., & Borgert, N. (2026, March 27). SoK: Self-Efficacy in Human-Centered Security and Privacy Research - A Psychometric View. Retrieved from osf.io/deh9a    |
+| Adult Multidimensional Independence           | AMBI        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| 16 Personality Factor Questionnaire           | 16PF        | Openpsychometrics.org | Open-Source Psychometrics Project. (2019). Open psychology data: Raw data from online personality tests [Data set]. http://openpsychometrics.org/_rawdata/        |
+| Personality Inventory for DSM-5               | PID-5       | OSF: https://osf.io/6hwzk | Dai, A., & Syed, M. (2022, December 19). The Relationships between Maladaptive Traits and Cognitive Perception of Personal Goals. https://doi.org/10.17605/OSF.IO/6HWZK    |
+| Symptom Checklist 90 Revised                  | SCL-90-R    | OSF: https://osf.io/q5rgb | Shanzheng, W. (2025, September 4). Psychometrics of PSS-20 and SCL-90 and Their Associations among Chinese College Students. Retrieved from osf.io/q5rgb    |
+| Psychological Strain Scales                   | PSS         | OSF: https://osf.io/q5rgb | Shanzheng, W. (2025, September 4). Psychometrics of PSS-20 and SCL-90 and Their Associations among Chinese College Students. Retrieved from osf.io/q5rgb    |
+| Comprehensive Autistic Inventory + Adult ADHD Self-Report          | CATI/ASRS   | OSF: https://osf.io/qtngb | McCormack, E., & Metcalfe, D. (2026, March 29). The Relative Contribution of Autistic and ADHD Traits to Internalising Problems. Retrieved from osf.io/qtngb   |
+| General Attitudes towards AI Scale            | GAAIS       | https://doi.org/10.1080/10447318.2022.2085400 | Schepman, A., & Rodway, P. (2023). The General Attitudes towards Artificial Intelligence Scale (GAAIS): Confirmatory Validation and Associations with Personality, Corporate Distrust, and General Trust. International Journal of Human–Computer Interaction, 39(13), 2724–2741. https://doi.org/10.1080/10447318.2022.2085400    |
+| Cognitive Processes in Educational Technology and Pedagogical Scale | C-PETS      | OSF: https://osf.io/4b92d                      | Yoshida, M. (2025, October 26). Raw_Date:Development and Validation of the Creative Personality and Thinking Styles Scale. https://doi.org/10.17605/OSF.IO/4B92D     |
+| Educational Physical Technology  Engagement and Performance Scale | EPTEPS      | OSF: https://osf.io/ayqdw                            | Moudettir, y., Lotfi, S., & Ouhrir, S. (2026, May 17). Technology Acceptance in Moroccan Secondary Physical Education: National Multi-Regional Validation of the EPTEPS Scale (N = 2,456). https://doi.org/10.17605/OSF.IO/AYQDW     |
+| Vanity Scale                                  | —           | OSF: https://osf.io/2vmd8 | LeBel, E. P. (2021, December 2). The vanity construct re-examined: LeBel's vanity scale. Retrieved from osf.io/2vmd8    |
