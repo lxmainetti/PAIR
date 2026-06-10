@@ -13,7 +13,6 @@ filename-safe model id back (the R version shared this via ``<<-``).
 
 import os
 import time
-import pickle
 
 import numpy as np
 import requests
@@ -113,7 +112,7 @@ def get_embeddings_API(item_list, model="text-embedding-3-large", provider="open
 
     # ---- OpenAI ----
     if provider == "openai":
-        api_key = os.environ.get("OPEN_AI_API_KEY", "")
+        api_key = os.getenv("OPENAI_API_KEY")
 
         body_list = {"model": model}
         # Only embedding-3 generation supports tunable output dims
@@ -193,9 +192,6 @@ def get_embeddings_HF(item_list, model="dwulff/mpnet-personality", instruction=N
 
     # Per-model config: (quantize_4bit, instruction_mode, instruction, needs_eos, padding_side)
     match model:
-        case "dwulff/mpnet-personality":
-            instr_mode, instr, needs_eos, padding_side = (
-                "none", None, False, None)
         case "nvidia/NV-Embed-v2":
             instr_mode, instr, needs_eos, padding_side = (
                 "prompt", instruction or psycho_instruct, True, "right")
@@ -208,12 +204,10 @@ def get_embeddings_HF(item_list, model="dwulff/mpnet-personality", instruction=N
                 False, None)
         case "tencent/KaLM-Embedding-Gemma3-12B-2511":
             instr_mode, instr, needs_eos, padding_side = (
-                "prompt", f"Instruct: {instruction or psycho_instruct}\nQuery: ",
-                False, None)
+                "prompt", instruction or psycho_instruct, False, None)
         case "Qwen/Qwen3-Embedding-8B":
             instr_mode, instr, needs_eos, padding_side = (
-                "prompt", f"Instruct: {instruction or psycho_instruct}\nQuery: ",
-                False, None)
+                "prompt", instruction or psycho_instruct, False, None)
         case _:
             print(f"[get_embeddings_HF] no case for '{model}', using plain defaults.")
             instr_mode, instr, needs_eos, padding_side = (
@@ -240,8 +234,20 @@ def get_embeddings_HF(item_list, model="dwulff/mpnet-personality", instruction=N
             load_in_8bit=True,
             llm_int8_threshold=6.0,              # outlier cutoff; 6.0 is the default
         )
-    st = SentenceTransformer(model, trust_remote_code=True,
-                             model_kwargs=model_kwargs or None)
+    else:
+        model_kwargs["dtype"] = torch.bfloat16
+        
+    config_kwargs = {}
+    
+    if model == "nvidia/NV-Embed-v2":
+        config_kwargs["use_cache"] = False
+        model_kwargs["device_map"] = "cuda"
+
+    st = SentenceTransformer(model, trust_remote_code=True, 
+                             model_kwargs=model_kwargs or None,
+                             config_kwargs=config_kwargs or None
+                             )
+
     st.max_seq_length = max_seq_length
     if padding_side:
         st.tokenizer.padding_side = padding_side
