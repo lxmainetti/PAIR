@@ -1,5 +1,5 @@
 {
-  "emb_model": "tencent-KaLM-Embedding-Gemma3-12B-2511-4bit",
+  "emb_model": "intfloat-e5-mistral-7b-instruct",
   "aux_numeric": [
     "global_sim"
   ],
@@ -14,5 +14,5 @@
   "r_clip": 0.999,
   "sklearn_version": "1.8.0",
   "checkpoint": "../../models/dnn_siamese_cor.pt",
-  "saved_at": "2026-06-09T20:49:58.173962+00:00"
+  "saved_at": "2026-06-10T19:40:18.174948+00:00"
 }
