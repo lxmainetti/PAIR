@@ -1,4 +1,4 @@
-# ItemStats
+# PAIR - Predicting Associations of Inter-item Relationships
 
 A local, GPU-accelerated pipeline that predicts the pairwise correlation between any two psychometric items directly from their wording. It is built on Qwen-3 text embeddings and a Siamese DNN trained end-to-end on aggregated open-access survey data.
 
