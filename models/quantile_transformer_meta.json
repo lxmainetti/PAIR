@@ -1,5 +1,5 @@
 {
-  "emb_model": "intfloat-e5-mistral-7b-instruct",
+  "emb_model": "Qwen-Qwen3-Embedding-4B-4bit",
   "aux_numeric": [
     "global_sim"
   ],
@@ -13,6 +13,6 @@
   "outer_val_frac": 0.1,
   "r_clip": 0.999,
   "sklearn_version": "1.8.0",
-  "checkpoint": "../../models/dnn_siamese_cor.pt",
-  "saved_at": "2026-06-10T19:40:18.174948+00:00"
+  "checkpoint": "../../models/Qwen-Qwen3-Embedding-4B-4bit/dnn_siamese_cor.pt",
+  "saved_at": "2026-07-08T11:03:43.050482+00:00"
 }

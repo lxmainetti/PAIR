@@ -208,6 +208,13 @@ def get_embeddings_HF(item_list, model="dwulff/mpnet-personality", instruction=N
         case "Qwen/Qwen3-Embedding-8B":
             instr_mode, instr, needs_eos, padding_side = (
                 "prompt", instruction or psycho_instruct, False, None)
+        case "Qwen/Qwen3-Embedding-4B":
+            instr_mode, instr, needs_eos, padding_side = (
+                "prompt", instruction or psycho_instruct, False, None)
+        case "intfloat/e5-large-v2":
+            instr_mode, instr, needs_eos, padding_side = (
+                "prepend", f"Instruct: {instruction or psycho_instruct}\nQuery: ",
+                False, None)
         case _:
             print(f"[get_embeddings_HF] no case for '{model}', using plain defaults.")
             instr_mode, instr, needs_eos, padding_side = (
