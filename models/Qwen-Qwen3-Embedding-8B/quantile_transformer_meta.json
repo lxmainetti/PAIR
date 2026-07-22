@@ -12,7 +12,7 @@
   "n_features_in": 1,
   "outer_val_frac": 0.1,
   "r_clip": 0.999,
-  "sklearn_version": "1.8.0",
+  "sklearn_version": "1.9.0",
   "checkpoint": "../../models/Qwen-Qwen3-Embedding-8B/dnn_siamese_cor.pt",
-  "saved_at": "2026-07-13T10:29:20.482448+00:00"
+  "saved_at": "2026-07-21T18:30:56.138802+00:00"
 }
