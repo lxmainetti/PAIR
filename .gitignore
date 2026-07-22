@@ -11,3 +11,8 @@
 *.por
 *.pdf
 *.rhistory
+dnn*.json
+adhd.json
+*.db
+*.pyc
+*.pkl
