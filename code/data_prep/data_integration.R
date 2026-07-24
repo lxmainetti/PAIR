@@ -176,9 +176,7 @@ spi %>%
   intercorrelations(., spi.dictionary %>% slice(11:nrow(.)) %>% pull(item), scale_name = "SPI", scale_source = "psychTools")
 
 # Athenstaedt Gender Role Self-Concept
-intercorrelations(Athenstaedt %>% as_tibble() %>% select(starts_with("V")),
-                  psychTools::Athenstaedt.dictionary$Item[2:75],
-                  scale_name = "Athenstaedt", scale_source = "psychTools")
+# intercorrelations(Athenstaedt %>% as_tibble() %>% select(starts_with("V")), psychTools::Athenstaedt.dictionary$Item[2:75], scale_name = "Athenstaedt", scale_source = "psychTools")
 
 # ---- OpenPsychometrics scales (Q-prefixed codebook format) ----
 
@@ -195,7 +193,7 @@ intercorrelations(TMA, TMA_items, scale_name = "TMA", scale_source = "OpenPsycho
 # HEXACO-60
 hexaco <- read_tsv(paste0(path_to_scales, "HEXACO", data_path)) %>%
   select(-c("V1", "V2", "country", "elapse"))
-hexaco_items <- extract_hexaco_items(paste0(path_to_scales, "hexaco", cb))
+hexaco_items <- extract_hexaco_items(paste0(path_to_scales, "HEXACO", cb))
 item_cols <- colnames(hexaco)[!colnames(hexaco) %in%
                                 c("age", "gender", "accuracy", "country", "elapse", "V1", "V2")]
 intercorrelations(hexaco %>% shorten(), hexaco_items[item_cols],
@@ -250,12 +248,12 @@ intercorrelations(MACH, MACH_items, scale_name = "MACH", scale_source = "OpenPsy
 
 # Multidimensional General Knowledge Test (Q*A columns store raw text answers;
 # nchar / 2 converts the comma-encoded score into a numeric value)
-MGKT_items <- extract_items_robust(paste0(path_to_scales, "MGKT", cb))
-MGKT <- read_csv(paste0(path_to_scales, "MGKT", data_path)) %>%
-  select(starts_with("Q") & ends_with("A")) %>%
-  shorten() %>%
-  mutate(across(everything(), ~ nchar(.x) / 2))
-intercorrelations(MGKT, MGKT_items, scale_name = "MGKT", scale_source = "OpenPsychometrics")
+# MGKT_items <- extract_items_robust(paste0(path_to_scales, "MGKT", cb))
+# MGKT <- read_csv(paste0(path_to_scales, "MGKT", data_path)) %>%
+#   select(starts_with("Q") & ends_with("A")) %>%
+#   shorten() %>%
+#   mutate(across(everything(), ~ nchar(.x) / 2))
+# intercorrelations(MGKT, MGKT_items, scale_name = "MGKT", scale_source = "OpenPsychometrics")
 
 # Narcissistic Personality Adjective Checklist
 NPAS_items <- extract_items_robust(paste0(path_to_scales, "NPAS", cb))
@@ -336,7 +334,8 @@ GAAIS <- haven::read_sav(paste0(path_to_scales, "GAAIS/data.sav")) %>%
   select(-c(21:57, 78:87))
 colnames(GAAIS) <- sapply(GAAIS, function(x)
   attr(x, "label") %||% colnames(GAAIS)[which(sapply(GAAIS, identical, x))])
-GAAIS <- GAAIS %>% zap_labels() %>% zap_label() %>% zap_formats() %>% zap_widths()
+GAAIS <- GAAIS %>% zap_labels() %>% zap_label() %>% zap_formats() %>% zap_widths() %>% 
+  select(-CorporateDistrust1)
 intercorrelations(GAAIS, colnames(GAAIS), scale_name = "GAAIS", scale_source = "Supplementary Data, Journal")
 
 # Chronic Pain - Emotional / Trauma Survey
@@ -381,19 +380,24 @@ bainbridge <- read_csv(paste0(path_to_scales, "Bainbridge", data_path)) %>%
 bainbridge_items <- unname(labels_bb$s1[colnames(bainbridge)]) %>%
   str_replace(" - ", " ") %>%
   str_to_sentence()
-intercorrelations(bainbridge, bainbridge_items, scale_name = "Bainbridge_1", scale_source = "OSF")
+intercorrelations(bainbridge, bainbridge_items, scale_name = "Bainbridge_S1", scale_source = "OSF")
 
 # SAPA 696-item public release
 sapa_items <- read_csv(paste0(path_to_scales, "SAPA/iteminfo696.csv"),
                        locale = locale(encoding = "latin1")) %>%
-  select(Item) %>% dplyr::pull() %>% paste0("I ", .) %>% str_to_sentence()
+  select(Item) %>% 
+  mutate(
+    Item = str_remove_all(Item, "\\[|\\]")
+  ) %>% 
+  dplyr::pull() %>% paste0("I ", .) %>% str_to_sentence()
 sapa <- read_csv(paste0(path_to_scales, "SAPA/data.csv")) %>% select(-c(RID:p2occIncomeEst))
 intercorrelations(sapa, sapa_items, scale_name = "SAPA", scale_source = "SAPA")
 
 # ---- Export training set ----
 
+item_list <- item_list %>% distinct(item, .keep_all = TRUE)
 
-
+dat_cors <- dat_cors %>% distinct(Parameter1, Parameter2, .keep_all = TRUE)
 
 export_accumulators(prefix = "")
 
@@ -410,7 +414,7 @@ stopifnot(all(colnames(bainbridge_holdout) %in% names(labels_bb$s2)))
 bainbridge_holdout_items <- unname(labels_bb$s2[colnames(bainbridge_holdout)]) %>%
   str_replace(" - ", " ") %>%
   str_to_sentence()
-intercorrelations(bainbridge_holdout, bainbridge_holdout_items, scale_name = "Bainbridge_2", scale_source = "OSF")
+intercorrelations(bainbridge_holdout, bainbridge_holdout_items, scale_name = "Bainbridge_S2", scale_source = "OSF")
 
 export_accumulators(prefix = "holdout_")
 
@@ -425,8 +429,14 @@ sb_val <- read_rds(paste0(path_to_scales, "surveybot_val_study/data.rds")) %>%
   as_tibble() %>%
   select(AAID_01:BFI10)
 
-sb_val_items <- map_chr(sb_val, ~ attr(.x, "label") %||% NA_character_) %>%
-  str_remove("^.*: ")
+sb_labels <- map_chr(sb_val, ~ attr(.x, "label") %||% NA_character_)
+
+# keep real items only: has a label, and not an attention check
+keep <- !is.na(sb_labels) &
+  !str_detect(sb_labels, "To ensure data quality, please choose")
+
+sb_val       <- sb_val[keep]                          # same columns dropped
+sb_val_items <- str_remove(sb_labels[keep], "^.*: ")  # strip prefix on survivors
 
 sb_val <- sb_val %>% zap_formats() %>% zap_label() %>% zap_labels()
 intercorrelations(sb_val, sb_val_items, scale_name = "Hommel_Arslan_val", scale_source = "OSF")
