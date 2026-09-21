@@ -102,6 +102,10 @@ def main(argv=None):
     
     # ---- Save embedding config so inference.py can re-embed new items the same way ----
     model_safe = args.model.replace(":", "-").replace("/", "-")
+    if args.backend == "hf" and args.quantize > 0:
+        # Mirror get_embeddings_HF's model_safe suffixing so the meta lands in the
+        # same quantization-specific folder as the checkpoint (e.g. "...-4bit").
+        model_safe = f"{model_safe}-{args.quantize}bit"
 
     meta = {
         "model_safe": model_safe,
