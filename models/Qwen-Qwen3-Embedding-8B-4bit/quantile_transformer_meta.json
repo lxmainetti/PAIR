@@ -8,11 +8,11 @@
   "output_distribution": "normal",
   "n_quantiles": 1000,
   "subsample": 200000,
-  "random_state": 42,
+  "random_state": 67,
   "n_features_in": 1,
   "outer_val_frac": 0.1,
   "r_clip": 0.999,
-  "sklearn_version": "1.9.0",
-  "checkpoint": "../../models/Qwen-Qwen3-Embedding-8B-4bit/dnn_siamese_cor.pt",
-  "saved_at": "2026-08-07T12:23:14.871108+00:00"
+  "sklearn_version": "1.8.0",
+  "checkpoint": "A:\\embeddings_git\\PAIR\\models\\Qwen-Qwen3-Embedding-8B-4bit\\dnn_siamese_cor.pt",
+  "saved_at": "2026-09-21T12:59:40.065466+00:00"
 }
