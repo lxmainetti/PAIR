@@ -166,3 +166,7 @@ Hyperparameters were searched with a standalone Optuna script (`code/modelling/o
 
 - Distribute trained checkpoints without bloating git history (Git LFS, or hosting `models/` externally).
 - Re-run Optuna HPT with v4's wider search space as the new baseline.
+
+## 📄 License
+
+The code and trained model weights in this repository are released under the MIT License; see [`LICENSE`](LICENSE). The psychometric instruments in the training pool are not part of this repository and remain under their original authors' terms; see [`scale_sources.md`](scale_sources.md).
