@@ -174,6 +174,10 @@ def _resolve_model(model, quantize, backend, embed_model) -> tuple:
 def _embed_items(item_texts, model_dir, backend=None, embed_model=None, **overrides) -> dict:
     meta = _read_json(Path(model_dir) / "embedding_meta.json")
     backend = backend or meta.get("backend")
+    # backend="deepinfra": same model as hf, embedded via the DeepInfra API instead
+    if backend == "deepinfra":
+        backend = "api"
+        overrides["provider"] = "deepinfra"
     embed_model_id = embed_model or meta.get("model")
     if not backend or not embed_model_id:
         raise ValueError(

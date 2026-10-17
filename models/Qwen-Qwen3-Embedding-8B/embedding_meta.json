@@ -1,0 +1,11 @@
+{
+  "model_safe": "Qwen-Qwen3-Embedding-8B",
+  "backend": "hf",
+  "model": "Qwen/Qwen3-Embedding-8B",
+  "instruction": null,
+  "batch_size": 32,
+  "max_seq_length": 256,
+  "normalize": false,
+  "quantize": 0,
+  "note": "Checkpoint trained on DeepInfra embeddings of the same model; embed new items locally (backend='hf', default) or via backend='deepinfra'."
+}

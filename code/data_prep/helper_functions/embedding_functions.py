@@ -19,6 +19,14 @@ import numpy as np
 import requests
 
 
+# Task instruction for instruction-aware models (Qwen3 etc.). Shared by the local
+# HF backend and the DeepInfra API, so both produce embeddings in the same space.
+PSYCHO_INSTRUCT = (
+    "Given a psychometric scale item, represent its latent psychological "
+    "constructs for predicting inter-item response correlations."
+)
+
+
 # ---- Local Ollama embeddings ----
 
 def get_embeddings(item_list, model="qwen3-embedding:8b", include_instruction=True):
@@ -85,7 +93,11 @@ _OPENAI_MODEL_DIMS = {
 
 def get_embeddings_API(item_list, model="text-embedding-3-large", provider="openai",
                        dims=None, task_type="SEMANTIC_SIMILARITY"):
-    """Generate embeddings using OpenAI or Gemini.
+    """Generate embeddings using OpenAI, Gemini or DeepInfra.
+
+    provider="deepinfra" serves open-weight models (e.g. Qwen/Qwen3-Embedding-8B)
+    over an OpenAI-compatible API. model_safe is the same as for the local HF
+    backend, so both write to / read from the same data/raw and models/ folder.
 
     Provider is detected from ``provider``. Output dimensionality is fixed for
     older OpenAI models, tunable from ``text-embedding-3-*`` onwards, and
@@ -213,6 +225,27 @@ def get_embeddings_API(item_list, model="text-embedding-3-large", provider="open
             for batch_results in pool.map(_embed_batch, batches):
                 embeddings_list.extend(batch_results)
 
+    # ---- DeepInfra (OpenAI-compatible, same weights as the local HF models) ----
+    if provider == "deepinfra":
+        api_key = os.getenv("DEEPINFRA_API_KEY")
+        if not api_key:
+            raise RuntimeError("DEEPINFRA_API_KEY is not set.")
+
+        # Qwen3 gets the same instruction prefix as get_embeddings_HF
+        if "qwen3" in model.lower():
+            inputs = [f"Instruct: {PSYCHO_INSTRUCT}\nQuery: {t}" for t in items]
+        else:
+            inputs = items
+
+        for i in range(0, len(inputs), 100):
+            resp = _post_with_retry(
+                "https://api.deepinfra.com/v1/openai/embeddings",
+                json_body={"model": model, "input": inputs[i:i + 100], "encoding_format": "float"},
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+            data = sorted(resp.json()["data"], key=lambda d: d["index"])
+            embeddings_list.extend(np.asarray(d["embedding"], dtype=float) for d in data)
+
     # Key by item text and persist
     embeddings_by_item = dict(zip(items, embeddings_list))
     print("SUCCESS")
@@ -234,10 +267,7 @@ def get_embeddings_HF(item_list, model="dwulff/mpnet-personality", instruction=N
     import torch
     from sentence_transformers import SentenceTransformer
 
-    psycho_instruct = (
-        "Given a psychometric scale item, represent its latent psychological "
-        "constructs for predicting inter-item response correlations."
-    )
+    psycho_instruct = PSYCHO_INSTRUCT
 
     # Per-model config: (quantize_4bit, instruction_mode, instruction, needs_eos, padding_side)
     match model:

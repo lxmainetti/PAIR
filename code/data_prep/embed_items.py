@@ -67,8 +67,10 @@ def build_argparser() -> argparse.ArgumentParser:
                          "'qwen3-embedding:8b' (ollama), 'Qwen/Qwen3-Embedding-8B' (hf).")
 
     # ---- api backend ----
-    p.add_argument("--provider", choices=["openai", "google"], default="openai",
-                    help="[api backend] Hosted embedding provider.")
+    p.add_argument("--provider", choices=["openai", "google", "deepinfra"], default="openai",
+                    help="[api backend] Hosted embedding provider. 'deepinfra' serves open-weight "
+                         "models (e.g. Qwen/Qwen3-Embedding-8B) and writes to the same folder as "
+                         "the hf backend for that model.")
     p.add_argument("--dims", type=int, default=None,
                     help="[api backend] Output embedding dimensionality. Left unset, resolves "
                          "per-model (1536 for text-embedding-3-small, 3072 for -large, etc.).")
