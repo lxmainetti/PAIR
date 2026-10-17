@@ -12,6 +12,8 @@ library(stringr)
 library(readxl)
 library(haven)
 
+#setwd("code/data_prep")
+
 # ---- Setup ----
 
 dir.create("../../data/raw", showWarnings = FALSE)
@@ -54,12 +56,12 @@ append_item_list <- function(data, item_wordings, scale_name, scale_source) {
 # testing = TRUE returns the correlation tibble without mutating globals.
 # `scale_name` is either length 1 or one entry per item (see append_item_list()).
 intercorrelations <- function(data, dic_col, testing = FALSE, scale_name, scale_source){
+  dic_col <- dic_col %>% str_replace_all(., "'''", "'")
+
   dat <- data
   colnames(dat) <- dic_col
 
   stopifnot(length(scale_name) %in% c(1L, length(dic_col)))
-
-  dic_col <- dic_col %>% str_replace(., "'''", "'")
 
   if(!testing)
     append_item_list(data, dic_col %>% as_tibble() %>% rename(item = value), scale_name=scale_name, scale_source = scale_source)
@@ -355,18 +357,21 @@ spi %>%
 # ---- OpenPsychometrics scales (Q-prefixed codebook format) ----
 
 # Humor Styles Questionnaire
-humor <- read_csv(paste0(path_to_scales, "humor", data_path)) %>% select(Q1:Q32)
+humor <- read_csv(paste0(path_to_scales, "humor", data_path)) %>% select(Q1:Q32) %>%
+  mutate(across(everything(), ~ na_if(.x, -1)))
 humor_items <- extract_items_robust(paste0(path_to_scales, "humor", cb))
 intercorrelations(humor, humor_items, scale_name = "HSQ", scale_source = "OpenPsychometrics")
 
 # Taylor Manifest Anxiety Scale
-TMA <- read_csv(paste0(path_to_scales, "TMA", data_path)) %>% select(starts_with("Q"))
+TMA <- read_csv(paste0(path_to_scales, "TMA", data_path)) %>% select(starts_with("Q")) %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 TMA_items <- extract_items_robust(paste0(path_to_scales, "TMA", cb))
 intercorrelations(TMA, TMA_items, scale_name = "TMA", scale_source = "OpenPsychometrics")
 
 # HEXACO-60
 hexaco <- read_tsv(paste0(path_to_scales, "HEXACO", data_path)) %>%
-  select(-c("V1", "V2", "country", "elapse"))
+  select(-c("V1", "V2", "country", "elapse")) %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 hexaco_items <- extract_hexaco_items(paste0(path_to_scales, "HEXACO", cb))
 item_cols <- colnames(hexaco)[!colnames(hexaco) %in%
                                 c("age", "gender", "accuracy", "country", "elapse", "V1", "V2")]
@@ -374,7 +379,8 @@ intercorrelations(hexaco %>% shorten(), hexaco_items[item_cols],
                   scale_name = "HEXACO", scale_source = "OpenPsychometrics")
 
 # RIASEC Holland Occupational Themes
-riasec <- read_tsv(paste0(path_to_scales, "riasec", data_path)) %>% select(R1:C8)
+riasec <- read_tsv(paste0(path_to_scales, "riasec", data_path)) %>% select(R1:C8) %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 riasec_items <- extract_riasec_items(paste0(path_to_scales, "riasec", cb)) %>% 
   paste0("I would like to ", .) %>% str_to_sentence()
 intercorrelations(riasec %>% shorten(), riasec_items, scale_name = "RIASEC", scale_source = "OpenPsychometrics")
@@ -382,7 +388,9 @@ intercorrelations(riasec %>% shorten(), riasec_items, scale_name = "RIASEC", sca
 # Consideration of Future Consequences Scale
 CFCS_items <- extract_items_robust(paste0(path_to_scales, "CFCS", cb))
 CFCS <- read_tsv(paste0(path_to_scales, "CFCS", data_path)) %>%
-  select(starts_with("Q")) %>% shorten()
+  select(starts_with("Q")) %>% shorten() %>%
+  mutate(across(everything(), ~ na_if(.x, 0))) %>%
+  mutate(across(everything(), ~ na_if(.x, -1)))
 intercorrelations(CFCS, CFCS_items, scale_name = "CFCS", scale_source = "OpenPsychometrics")
 
 # Depression Anxiety Stress Scales (only response columns end with "A")
@@ -394,24 +402,28 @@ intercorrelations(DASS, DASS_items, scale_name = "DASS", scale_source = "OpenPsy
 # Experiences in Close Relationships
 ECR_items <- extract_items_robust(paste0(path_to_scales, "ECR", cb))
 ECR <- read_csv(paste0(path_to_scales, "ECR", data_path)) %>%
-  select(starts_with("Q")) %>% shorten()
+  select(starts_with("Q")) %>% shorten() %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(ECR, ECR_items, scale_name = "ECR", scale_source = "OpenPsychometrics")
 
 # Empathizing / Systemizing Quotient (exclude scale totals SQ, EQ)
 EQSQ_items <- extract_items_robust(paste0(path_to_scales, "EQSQ", cb))
 EQSQ <- read_tsv(paste0(path_to_scales, "EQSQ", data_path)) %>%
-  select(starts_with("E"), starts_with("S"), -SQ, -EQ) %>% shorten()
+  select(starts_with("E"), starts_with("S"), -SQ, -EQ) %>% shorten() %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(EQSQ, EQSQ_items, scale_name = "EQSQ", scale_source = "OpenPsychometrics")
 
 # Generic Conspiracist Beliefs Scale
 GCBS_items <- extract_items_robust(paste0(path_to_scales, "GCBS", cb))
 GCBS <- read_csv(paste0(path_to_scales, "GCBS", data_path)) %>%
-  select(starts_with("Q")) %>% shorten()
+  select(starts_with("Q")) %>% shorten() %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(GCBS, GCBS_items, scale_name = "GCBS", scale_source = "OpenPsychometrics")
 
 # Kentucky Inventory of Mindfulness Skills
 KIMS_items <- extract_items_robust(paste0(path_to_scales, "KIMS", cb))
-KIMS <- read_csv(paste0(path_to_scales, "KIMS", data_path)) %>% select(starts_with("Q"))
+KIMS <- read_csv(paste0(path_to_scales, "KIMS", data_path)) %>% select(starts_with("Q")) %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(KIMS, KIMS_items, scale_name = "KIMS", scale_source = "OpenPsychometrics")
 
 # Machiavellianism (MACH-IV)
@@ -432,25 +444,29 @@ intercorrelations(MACH, MACH_items, scale_name = "MACH", scale_source = "OpenPsy
 # Nerdy Personality Attributes Scale
 NPAS_items <- extract_items_robust(paste0(path_to_scales, "NPAS", cb))
 NPAS <- read_tsv(paste0(path_to_scales, "NPAS", data_path)) %>%
-  select(starts_with("Q")) %>% shorten()
+  select(starts_with("Q")) %>% shorten() %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(NPAS, NPAS_items, scale_name = "NPAS", scale_source = "OpenPsychometrics")
 
 # Rosenberg Self-Esteem
 RSE_items <- extract_items_robust(paste0(path_to_scales, "RSE", cb))
 RSE <- read_tsv(paste0(path_to_scales, "RSE", data_path)) %>%
-  select(starts_with("Q")) %>% shorten()
+  select(starts_with("Q")) %>% shorten() %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(RSE, RSE_items, scale_name = "RSE", scale_source = "OpenPsychometrics")
 
 # Right-Wing Authoritarianism
 RWAS_items <- extract_items_robust(paste0(path_to_scales, "RWAS", cb))
 RWAS <- read_csv(paste0(path_to_scales, "RWAS", data_path)) %>%
-  select(starts_with("Q")) %>% shorten()
+  select(starts_with("Q")) %>% shorten() %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(RWAS, RWAS_items, scale_name = "RWAS", scale_source = "OpenPsychometrics")
 
 # Sexual Compulsivity Scale
 SCS_items <- extract_items_robust(paste0(path_to_scales, "SCS", cb))
 SCS <- read_csv(paste0(path_to_scales, "SCS", data_path)) %>%
-  select(starts_with("Q")) %>% shorten()
+  select(starts_with("Q")) %>% shorten() %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(SCS, SCS_items, scale_name = "SCS", scale_source = "OpenPsychometrics")
 
 # Adult Multidimensional Independence
@@ -533,20 +549,23 @@ intercorrelations(Vanity_Scale, Vanity_Scale_items, scale_name = "VanityScale", 
 # Multidimensional Sexual Self-Concept Questionnaire
 # (OpenPsychometrics raw-data repository, not OSF -- fixed to match Table A1)
 MSSCQ_items <- extract_items_robust(paste0(path_to_scales, "MSSCQ", cb))
-MSSCQ <- read_tsv(paste0(path_to_scales, "MSSCQ", data_path)) %>% select(starts_with("Q"))
+MSSCQ <- read_tsv(paste0(path_to_scales, "MSSCQ", data_path)) %>% select(starts_with("Q")) %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(MSSCQ, MSSCQ_items, scale_name = "MSSCQ", scale_source = "OpenPsychometrics")
 
 # Hypersensitive Narcissism Scale + Dirty Dozen
 # (OpenPsychometrics raw-data repository, not OSF -- fixed to match Table A1)
 HSNS_DD_items <- extract_items_robust(paste0(path_to_scales, "HSNS+DD", cb))
 HSNS_DD <- read_tsv(paste0(path_to_scales, "HSNS+DD", data_path)) %>%
-  select(starts_with("H"), starts_with("D"))
+  select(starts_with("H"), starts_with("D")) %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(HSNS_DD, HSNS_DD_items, scale_name = "HSNS_DD", scale_source = "OpenPsychometrics")
 
 # Short Dark Triad
 # (OpenPsychometrics raw-data repository, not OSF -- fixed to match Table A1)
 SD3_items <- extract_items_robust(paste0(path_to_scales, "SD3", cb))
-SD3 <- read_tsv(paste0(path_to_scales, "SD3", data_path)) %>% select(-country, -source)
+SD3 <- read_tsv(paste0(path_to_scales, "SD3", data_path)) %>% select(-country, -source) %>%
+  mutate(across(everything(), ~ na_if(.x, 0)))
 intercorrelations(SD3, SD3_items, scale_name = "SD3", scale_source = "OpenPsychometrics")
 
 # Bainbridge mega-study s1 (item texts via the authors' RDS label dict, with
@@ -641,3 +660,24 @@ split_half_correlations(sb_val, sb_val_items, scale_name = sb_val_scales, scale_
 
 export_accumulators(prefix = "validation_")
 export_splithalf(prefix = "validation_")
+
+# Subscale membership + keys for the validation items, taken from the scored
+# composites in the data file (attribute "scale_item_names"; "_R" = reverse-
+# keyed). Long format, one row per scale x item: facets and their domain
+# composites are both kept, so an item can appear in more than one scale.
+sb_raw <- read_rds(paste0(path_to_scales, "surveybot_val_study/data.rds"))
+sb_item_text <- setNames(sb_val_items, names(sb_val))
+sb_scale_cols <- names(sb_raw)[map_lgl(sb_raw, ~ !is.null(attr(.x, "scale_item_names")))]
+
+validation_scales <- map_dfr(sb_scale_cols, function(s){
+  ids <- attr(sb_raw[[s]], "scale_item_names")
+  tibble(scale    = s,
+         item     = unname(sb_item_text[str_remove(ids, "_R$")]),
+         variable = str_remove(ids, "_R$"),
+         key      = if_else(str_detect(ids, "_R$"), -1, 1))
+}) %>%
+  group_by(scale) %>%
+  mutate(n_items = n()) %>%
+  ungroup()
+
+arrow::write_parquet(validation_scales, "../../data/raw/validation_scales.parquet")
