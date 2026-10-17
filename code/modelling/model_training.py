@@ -25,6 +25,7 @@ this script is a drop-in equivalent for batch/HPC use.
 import argparse
 import json
 import os
+import random
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -94,13 +95,57 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--patience", type=int, default=20,
                     help="Early-stopping patience (epochs without outer-val RMSE improvement).")
 
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--seed", type=int, default=67,
+                    help="Master RNG seed. Seeds Python, NumPy and torch (CPU + CUDA), the "
+                         "item-disjoint split and the aux quantile transformer.")
+    p.add_argument("--nondeterministic", action="store_true", default=False,
+                    help="Allow cuDNN to pick nondeterministic kernels. Faster on some GPUs, "
+                         "but run-to-run results will no longer be bit-identical.")
     p.add_argument("--no-plots", action="store_true", default=True,
                     help="Skip generating/saving diagnostic + holdout plots.")
     p.add_argument("--quiet-epochs", action="store_true", default=False,
                     help="Only print at early-stopping / final summary, not every 5 epochs.")
+    p.add_argument("--verbose", action="store_true", default=False,
+                    help="Print setup detail (tensor shapes, module tree, file paths). Off by "
+                         "default: the run prints a one-line config header, the epoch trace, "
+                         "and a metrics table.")
 
     return p
+
+
+def metrics_row(label: str, n: int, r: float, r2: float, rmse: float, mae: float) -> str:
+    """One fixed-width row of the end-of-run metrics table (see metrics_header)."""
+    return f"{label:<12s}{n:>10,}  {r:>7.4f}  {r2:>7.4f}  {rmse:>7.4f}  {mae:>7.4f}"
+
+
+def metrics_header() -> str:
+    return (f"{'':<12s}{'n pairs':>10}  {'r':>7}  {'R2':>7}  {'RMSE':>7}  {'MAE':>7}\n"
+            + "-" * 56)
+
+
+def set_seed(seed: int, deterministic: bool = True) -> None:
+    """Seed every RNG the training run touches, and pin cuDNN to deterministic kernels.
+
+    torch.manual_seed() alone is not enough for reproducible runs: it leaves the
+    stdlib `random` module unseeded, and it does not stop cuDNN from autotuning its
+    way to a different (equally valid, differently rounded) convolution/GEMM kernel
+    on a later run. Seeding all four RNGs and fixing the cuDNN backend makes a run
+    reproducible on the same machine and GPU.
+
+    Note that this pins the *stochastic* parts of training. It does not make results
+    comparable across different GPUs, CUDA versions, or torch builds, where kernel
+    selection and floating-point reduction order differ regardless of seed.
+    """
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)          # no-op when CUDA is unavailable
+    os.environ["PYTHONHASHSEED"] = str(seed)
+
+    torch.backends.cudnn.deterministic = deterministic
+    # benchmark=True lets cuDNN re-autotune per input shape, which is a second,
+    # seed-independent source of run-to-run drift -- off whenever we want determinism.
+    torch.backends.cudnn.benchmark = not deterministic
 
 
 def parse_dims(s: str) -> tuple:
@@ -149,41 +194,48 @@ def main(argv=None):
     ckpt_path = model_dir / "dnn_siamese_cor.pt"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}")
-    torch.manual_seed(args.seed)
-    np.random.seed(args.seed)
+    set_seed(args.seed, deterministic=not args.nondeterministic)
+
+    def vprint(*a, **k):
+        """Setup detail: shown only with --verbose, so a sweep's log stays readable."""
+        if args.verbose:
+            print(*a, **k)
 
     # ---- 1. Load item embeddings + pair table; build index ----
     emb_df = pl.read_parquet(train_emb_path)
     emb_cols = [c for c in emb_df.columns if c.startswith("emb")]
     emb_dim = len(emb_cols)
-    print(f"Item embeddings: {emb_df.shape}  emb_dim={emb_dim}")
+    vprint(f"Item embeddings: {emb_df.shape}  emb_dim={emb_dim}")
 
     item_to_idx = {name: i for i, name in enumerate(emb_df["item"].to_list())}
     item_emb = torch.tensor(emb_df.select(emb_cols).to_numpy(), dtype=torch.float32).to(device)
-    print(f"ITEM_EMB on device: {tuple(item_emb.shape)} "
-          f"({item_emb.element_size() * item_emb.nelement() / 1e6:.1f} MB)")
+    vprint(f"ITEM_EMB on device: {tuple(item_emb.shape)} "
+           f"({item_emb.element_size() * item_emb.nelement() / 1e6:.1f} MB)")
 
     dat = pl.read_parquet(train_pair_path).filter(
         (pl.col("r").is_not_null()) & (pl.col("r") != 1)
     )
     dat = add_global_sim(dat, item_emb, item_to_idx)
-    print(f"Pair rows (raw): {dat.height:,}")
+    vprint(f"Pair rows (raw): {dat.height:,}")
 
     known = pl.Series("item", list(item_to_idx.keys())).implode()
     dat = dat.filter(
         pl.col("Parameter1").is_in(known) & pl.col("Parameter2").is_in(known)
     ).select(cs.contains("Para") | cs.contains("prod"), pl.col(["global_sim", "r"]))
-    print(f"Pair rows (with embeddings): {dat.height:,}")
+    vprint(f"Pair rows (with embeddings): {dat.height:,}")
 
     aux_numeric = ["global_sim"]
 
     # ---- 2. item_disjoint split ----
+    # sort() before sample(): polars' unique() is multithreaded and does NOT guarantee
+    # row order, so the same seed was permuting a differently-ordered item list on every
+    # run and silently producing a different item-disjoint split each time. Sorting
+    # pins the input order, which is what makes `seed` actually reproduce a split.
     items_all = (
         pl.concat([
             dat.select(pl.col("Parameter1").alias("item")),
             dat.select(pl.col("Parameter2").alias("item")),
-        ]).unique().to_series().sample(fraction=1.0, seed=args.seed)
+        ]).unique(maintain_order=True).to_series().sort().sample(fraction=1.0, seed=args.seed)
     )
     split_idx = int(len(items_all) * (1 - args.outer_val_frac))
     train_items = items_all.slice(0, split_idx).implode()
@@ -192,15 +244,15 @@ def main(argv=None):
     train_df = dat.filter(pl.col("Parameter1").is_in(train_items) & pl.col("Parameter2").is_in(train_items))
     outer_df = dat.filter(pl.col("Parameter1").is_in(outer_items) & pl.col("Parameter2").is_in(outer_items))
     dropped = dat.height - train_df.height - outer_df.height
-    print(f"Split: item-disjoint | train pairs {train_df.height:,} | outer val pairs {outer_df.height:,} | "
-          f"dropped mixed pairs: {dropped:,}")
+    vprint(f"Split: item-disjoint | train pairs {train_df.height:,} | "
+           f"outer val pairs {outer_df.height:,} | dropped mixed pairs: {dropped:,}")
 
     # ---- 3. Fit aux preprocessor on the training pool only ----
     scaler = QuantileTransformer(
         output_distribution="normal", n_quantiles=1000, subsample=200_000, random_state=args.seed,
     ).fit(train_df.select(pl.col("global_sim")).to_numpy())
     aux_dim = scaler.transform(train_df.select(pl.col("global_sim")).head(1).to_numpy()).shape[1]
-    print(f"AUX_DIM (numeric) = {aux_dim}")
+    vprint(f"AUX_DIM (numeric) = {aux_dim}")
 
     def featurize_pairs(df):
         idx1 = np.fromiter((item_to_idx[p] for p in df["Parameter1"].to_list()), dtype=np.int64)
@@ -211,8 +263,8 @@ def main(argv=None):
 
     train_idx1, train_idx2, train_aux, train_y = featurize_pairs(train_df)
     outer_idx1, outer_idx2, outer_aux, outer_y = featurize_pairs(outer_df)
-    print(f"train tensors: idx1 {train_idx1.shape} aux {train_aux.shape} y {train_y.shape}")
-    print(f"outer tensors: idx1 {outer_idx1.shape} aux {outer_aux.shape} y {outer_y.shape}")
+    vprint(f"train tensors: idx1 {train_idx1.shape} aux {train_aux.shape} y {train_y.shape}")
+    vprint(f"outer tensors: idx1 {outer_idx1.shape} aux {outer_aux.shape} y {outer_y.shape}")
 
     # ---- 4. Move pair tensors to device ----
     train_idx1_t = torch.tensor(train_idx1, dtype=torch.long, device=device)
@@ -235,8 +287,14 @@ def main(argv=None):
         encoder_dims=encoder_dims, head_dims=head_dims,
         dropout=args.dropout, use_skip=args.use_skip,
     ).to(device)
-    print(model)
-    print(f"\nTrainable params: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    vprint(model)
+    print(f"{args.emb_model} | {device} | seed {args.seed} | {emb_dim}d in -> "
+          f"{n_params/1e6:.2f}M params")
+    print(f"encoder {encoder_dims} | head {head_dims} | dropout {args.dropout} | "
+          f"lr {args.lr:g} | batch {args.batch_size}")
+    print(f"pairs: {train_df.height:,} train | {outer_df.height:,} outer-val "
+          f"(item-disjoint, {dropped:,} mixed pairs dropped)\n")
 
     # ---- 6. Training loop ----
     optimizer = optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
@@ -304,7 +362,7 @@ def main(argv=None):
 
     model.load_state_dict(torch.load(ckpt_path, map_location=device))
     model.eval()
-    print(f"\nLoaded best checkpoint (outer val RMSE = {best_rmse:.5f}) from {ckpt_path}")
+    vprint(f"Loaded best checkpoint (outer val RMSE = {best_rmse:.5f}) from {ckpt_path}")
 
     # ---- 7. Export the fitted scaler + metadata ----
     import joblib
@@ -331,8 +389,8 @@ def main(argv=None):
     }
     with open(scaler_meta_path, "w") as f:
         json.dump(scaler_meta, f, indent=2)
-    print(f"Saved scaler -> {scaler_path}")
-    print(f"Saved meta   -> {scaler_meta_path}")
+    vprint(f"Saved scaler -> {scaler_path}")
+    vprint(f"Saved meta   -> {scaler_meta_path}")
 
     # ---- 8. Evaluation on outer val ----
     with torch.no_grad():
@@ -350,12 +408,8 @@ def main(argv=None):
     r2 = r2_score(y_true, y_pred)
     mae = mean_absolute_error(y_true, y_pred)
 
-    print("=== SIAMESE DNN OUTER-VAL EVALUATION (item_disjoint) ===")
-    print(f"N pairs:    {len(y_true):,}")
-    print(f"Pearson r:  {corr:.4f}")
-    print(f"R-squared:  {r2:.4f}")
-    print(f"RMSE:       {rmse:.4f}")
-    print(f"MAE:        {mae:.4f}")
+    print("\n" + metrics_header())
+    print(metrics_row("outer-val", len(y_true), corr, r2, rmse, mae))
 
     if not args.no_plots:
         fig, axes = plt.subplots(1, 2, figsize=(18, 8))
@@ -395,7 +449,7 @@ def main(argv=None):
     hold_df = pl.read_parquet(hold_pair_path).filter(
         (pl.col("r").is_not_null()) & (pl.col("r") != 1)
     )
-    print(f"\nHoldout pair rows on disk: {hold_df.height:,}")
+    vprint(f"Holdout pair rows on disk: {hold_df.height:,}")
 
     hold_emb_df = pl.read_parquet(hold_emb_path)
     hold_emb_cols = [c for c in hold_emb_df.columns if c.startswith("emb")]
@@ -415,13 +469,17 @@ def main(argv=None):
         combined_emb = torch.cat([item_emb, hold_emb_new], dim=0)
     else:
         combined_emb = item_emb
-    print(f"Combined embedding lookup: {len(item_to_idx):,} train + {len(new_names):,} new holdout = "
+    vprint(f"Combined embedding lookup: {len(item_to_idx):,} train + {len(new_names):,} new holdout = "
           f"{combined_emb.shape[0]:,} items")
 
     known_h = pl.Series("item", list(combined_item_to_idx.keys())).implode()
     pre_n = hold_df.height
     hold_df = hold_df.filter(pl.col("Parameter1").is_in(known_h) & pl.col("Parameter2").is_in(known_h))
-    print(f"After item-lookup filter: {hold_df.height:,} pairs (dropped {pre_n - hold_df.height:,})")
+    if pre_n != hold_df.height:
+        print(f"  WARNING: {pre_n - hold_df.height:,} of {pre_n:,} holdout pairs dropped -- "
+              f"items missing from the embedding file. Metrics cover {hold_df.height:,} pairs.")
+    else:
+        vprint(f"After item-lookup filter: {hold_df.height:,} pairs (dropped 0)")
 
     hold_df = add_global_sim(hold_df, combined_emb, combined_item_to_idx)
     h_idx1 = np.fromiter((combined_item_to_idx[p] for p in hold_df["Parameter1"].to_list()), np.int64)
@@ -449,16 +507,11 @@ def main(argv=None):
     r2_h = r2_score(y_h, h_preds)
     mae_h = mean_absolute_error(y_h, h_preds)
 
-    print("\n=== SIAMESE DNN HOLDOUT EVALUATION ===")
-    print(f"N pairs:    {len(y_h):,}")
-    print(f"Pearson r:  {corr_h:.4f}")
-    print(f"R-squared:  {r2_h:.4f}")
-    print(f"RMSE:       {rmse_h:.4f}")
-    print(f"MAE:        {mae_h:.4f}")
+    print(metrics_row("holdout", len(y_h), corr_h, r2_h, rmse_h, mae_h))
 
     from scipy import stats
     slope, intercept, _, _, se = stats.linregress(y_h, h_preds)
-    print(f"Slope: {slope:.4f} +/- {se:.4f} (SE)")
+    print(f"\ncalibration slope (holdout): {slope:.4f} +/- {se:.4f} (SE)")
 
     if not args.no_plots:
         fig, ax = plt.subplots(figsize=(8, 8))
@@ -478,7 +531,7 @@ def main(argv=None):
         plt.close(fig)
         print(f"Saved holdout scatter -> {plot_path}")
 
-    print(f"\nDone. Checkpoint: {ckpt_path}")
+    print(f"\ncheckpoint -> {ckpt_path}")
     return {
         "outer_val": {"n": len(y_true), "r": corr, "r2": r2, "rmse": rmse, "mae": mae},
         "holdout": {"n": len(y_h), "r": corr_h, "r2": r2_h, "rmse": rmse_h, "mae": mae_h,

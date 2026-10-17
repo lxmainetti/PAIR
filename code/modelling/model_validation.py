@@ -28,6 +28,7 @@ standalone; this script is a drop-in equivalent for batch/HPC use.
 
 import argparse
 import os
+import random
 from datetime import datetime
 from pathlib import Path
 
@@ -66,7 +67,12 @@ def build_argparser() -> argparse.ArgumentParser:
     p.add_argument("--logbook-path", default=str(REPO_ROOT / "performance_logbook.xlsx"),
                     help="xlsx file that one row per evaluation run gets appended to.")
 
-    p.add_argument("--seed", type=int, default=42)
+    p.add_argument("--verbose", action="store_true", default=False,
+                    help="Print setup detail (shapes, checkpoint/scaler paths, per-split load "
+                         "counts). Off by default: the run prints a config line and two tables.")
+    p.add_argument("--seed", type=int, default=67,
+                    help="Master RNG seed. Evaluation is deterministic anyway (model.eval(), "
+                         "no sampling), but this is kept in step with model_training.py.")
     p.add_argument("--encoder-dims", default="384",
                     help="Comma-separated encoder layer widths. Must match the checkpoint being loaded.")
     p.add_argument("--head-dims", default="256,130",
@@ -112,19 +118,14 @@ def add_global_sim(df, emb, name_to_idx, chunk=50_000):
     return df.with_columns(pl.Series("global_sim", out))
 
 
-def noise_ceiling(splithalf_path, label):
+def noise_ceiling(splithalf_path, label=None):
     sh = pl.read_parquet(splithalf_path).drop_nulls(subset=["r_half1", "r_half2"])
     r_half, _ = pearsonr(sh["r_half1"].to_numpy(), sh["r_half2"].to_numpy())
     target_consistency = (2 * r_half) / (1 + r_half)
-    print(f"=== {label}: noise ceiling ===")
-    print(f"N pairs (split-half table): {sh.height:,}")
-    print(f"Split-half correlation (each half ~N/2): {r_half:.4f}")
-    print(f"Sampling-based target consistency (full N): {target_consistency:.4f}")
-    print(f"Noise ceiling, sqrt(target consistency): {np.sqrt(target_consistency):.4f}")
     return target_consistency, sh.height
 
 
-def polarity_diagnostic(y_true, y_pred, label):
+def polarity_diagnostic(y_true, y_pred, label=None):
     neg = y_true < 0
     pos = y_true > 0
 
@@ -134,16 +135,6 @@ def polarity_diagnostic(y_true, y_pred, label):
     sign_concordance_neg = float((y_pred[neg] < 0).mean()) if neg.sum() > 0 else float("nan")
     sign_concordance_pos = float((y_pred[pos] > 0).mean()) if pos.sum() > 0 else float("nan")
     sign_concordance_all = float(((y_pred > 0) == (y_true > 0)).mean())
-
-    print(f"=== {label}: polarity diagnostic ===")
-    print(f"N negative-true pairs: {neg.sum():,}  |  N positive-true pairs: {pos.sum():,}")
-    print(f"Mean predicted r | true r < 0:  {mean_pred_given_neg:.4f}  "
-          f"(mean true r in this subset: {y_true[neg].mean():.4f})")
-    print(f"Mean predicted r | true r > 0:  {mean_pred_given_pos:.4f}  "
-          f"(mean true r in this subset: {y_true[pos].mean():.4f})")
-    print(f"Sign concordance, true r < 0 (predicted also negative): {sign_concordance_neg:.1%}")
-    print(f"Sign concordance, true r > 0 (predicted also positive): {sign_concordance_pos:.1%}")
-    print(f"Sign concordance, overall: {sign_concordance_all:.1%}")
 
     return {
         "mean_pred_given_neg": mean_pred_given_neg,
@@ -174,33 +165,42 @@ def main(argv=None):
     scaler_path = model_dir / "quantile_transformer.joblib"
 
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(f"Device: {device}")
-    torch.manual_seed(args.seed)
+
+    def vprint(*a, **k):
+        """Setup detail: shown only with --verbose, so a sweep's log stays readable."""
+        if args.verbose:
+            print(*a, **k)
+
+    random.seed(args.seed)
     np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     # ---- 2. Load training embeddings + pair table (for the item lookup) ----
     emb_df = pl.read_parquet(train_emb_path)
     emb_cols = [c for c in emb_df.columns if c.startswith("emb")]
     emb_dim = len(emb_cols)
-    print(f"Training embeddings: {emb_df.shape}  emb_dim={emb_dim}")
+    vprint(f"Training embeddings: {emb_df.shape}  emb_dim={emb_dim}")
 
     item_to_idx = {name: i for i, name in enumerate(emb_df["item"].to_list())}
     item_emb = torch.tensor(emb_df.select(emb_cols).to_numpy(), dtype=torch.float32).to(device)
-    print(f"ITEM_EMB on device: {tuple(item_emb.shape)}")
+    vprint(f"ITEM_EMB on device: {tuple(item_emb.shape)}")
 
     dat = pl.read_parquet(train_pair_path).filter(
         (pl.col("r").is_not_null()) & (pl.col("r") != 1)
     )
     dat = add_global_sim(dat, item_emb, item_to_idx)
-    print(f"Pair rows (with embeddings): {dat.height:,}")
+    vprint(f"Pair rows (with embeddings): {dat.height:,}")
 
     # ---- 3. Load the train-fitted preprocessor ----
     import joblib
 
     scaler = joblib.load(scaler_path)
     aux_dim = scaler.n_features_in_
-    print(f"Loaded scaler from {scaler_path}")
-    print(f"AUX_DIM (numeric) = {aux_dim}")
+    vprint(f"Loaded scaler from {scaler_path}")
+    vprint(f"AUX_DIM (numeric) = {aux_dim}")
 
     # ---- 4. Model architecture + checkpoint ----
     from siamese_model import SiameseDNN
@@ -212,14 +212,15 @@ def main(argv=None):
     ).to(device)
     model.load_state_dict(torch.load(ckpt_path, map_location=device))
     model.eval()
-    print(f"Loaded checkpoint from {ckpt_path}")
-    print(f"Trainable params: {sum(p.numel() for p in model.parameters() if p.requires_grad):,}")
+    vprint(f"Loaded checkpoint from {ckpt_path}")
+    n_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    print(f"{args.emb_model} | {device} | {emb_dim}d in -> {n_params/1e6:.2f}M params")
 
     # ---- 5. Holdout evaluation ----
     hold_df = pl.read_parquet(hold_pair_path).filter(
         (pl.col("r").is_not_null()) & (pl.col("r") != 1)
     )
-    print(f"\nHoldout pair rows on disk: {hold_df.height:,}")
+    vprint(f"Holdout pair rows on disk: {hold_df.height:,}")
 
     hold_emb_df = pl.read_parquet(hold_emb_path)
     hold_emb_cols = [c for c in hold_emb_df.columns if c.startswith("emb")]
@@ -239,7 +240,7 @@ def main(argv=None):
         combined_emb = torch.cat([item_emb, hold_emb_new], dim=0)
     else:
         combined_emb = item_emb
-    print(f"Combined embedding lookup: {len(item_to_idx):,} train + {len(new_names):,} new holdout = "
+    vprint(f"Combined embedding lookup: {len(item_to_idx):,} train + {len(new_names):,} new holdout = "
           f"{combined_emb.shape[0]:,} items")
 
     known_all = pl.Series("item", list(combined_item_to_idx.keys())).implode()
@@ -247,7 +248,11 @@ def main(argv=None):
     hold_df = hold_df.filter(
         pl.col("Parameter1").is_in(known_all) & pl.col("Parameter2").is_in(known_all)
     )
-    print(f"After item-lookup filter: {hold_df.height:,} pairs (dropped {pre_n - hold_df.height:,})")
+    if pre_n != hold_df.height:
+        print(f"  WARNING: {pre_n - hold_df.height:,} of {pre_n:,} holdout pairs dropped -- items "
+              f"missing from the embedding file. Metrics cover {hold_df.height:,} pairs.")
+    else:
+        vprint(f"After item-lookup filter: {hold_df.height:,} pairs (dropped 0)")
 
     hold_df = add_global_sim(hold_df, combined_emb, combined_item_to_idx)
     idx1 = np.fromiter((combined_item_to_idx[p] for p in hold_df["Parameter1"].to_list()), np.int64)
@@ -274,12 +279,7 @@ def main(argv=None):
     r2_h = r2_score(y_h, h_preds)
     mae_h = mean_absolute_error(y_h, h_preds)
 
-    print("\n=== SIAMESE DNN HOLDOUT EVALUATION ===")
-    print(f"N pairs:    {len(y_h):,}")
-    print(f"Pearson r:  {corr_h:.4f}")
-    print(f"R-squared:  {r2_h:.4f}")
-    print(f"RMSE:       {rmse_h:.4f}")
-    print(f"MAE:        {mae_h:.4f}")
+
 
     if not args.no_plots:
         fig, ax = plt.subplots(figsize=(8, 8))
@@ -303,7 +303,7 @@ def main(argv=None):
     val_df = pl.read_parquet(val_pair_path).filter(
         (pl.col("r").is_not_null()) & (pl.col("r") != 1)
     )
-    print(f"\nValidation pair rows on disk: {val_df.height:,}")
+    vprint(f"Validation pair rows on disk: {val_df.height:,}")
 
     val_emb_df = pl.read_parquet(val_emb_path)
     val_emb_cols = [c for c in val_emb_df.columns if c.startswith("emb")]
@@ -323,7 +323,7 @@ def main(argv=None):
         val_combined_emb = torch.cat([combined_emb, val_emb_new], dim=0)
     else:
         val_combined_emb = combined_emb
-    print(f"Validation embedding lookup: {combined_emb.shape[0]:,} prior + "
+    vprint(f"Validation embedding lookup: {combined_emb.shape[0]:,} prior + "
           f"{len(new_names_v):,} new validation = {val_combined_emb.shape[0]:,} items")
 
     known_all_v = pl.Series("item", list(val_item_to_idx.keys())).implode()
@@ -331,7 +331,11 @@ def main(argv=None):
     val_df = val_df.filter(
         pl.col("Parameter1").is_in(known_all_v) & pl.col("Parameter2").is_in(known_all_v)
     )
-    print(f"After item-lookup filter: {val_df.height:,} pairs (dropped {pre_n - val_df.height:,})")
+    if pre_n != val_df.height:
+        print(f"  WARNING: {pre_n - val_df.height:,} of {pre_n:,} validation pairs dropped -- items "
+              f"missing from the embedding file. Metrics cover {val_df.height:,} pairs.")
+    else:
+        vprint(f"After item-lookup filter: {val_df.height:,} pairs (dropped 0)")
 
     val_df = add_global_sim(val_df, val_combined_emb, val_item_to_idx)
     idx1_v = np.fromiter((val_item_to_idx[p] for p in val_df["Parameter1"].to_list()), np.int64)
@@ -359,12 +363,7 @@ def main(argv=None):
     r2_v = r2_score(y_v, v_preds)
     mae_v = mean_absolute_error(y_v, v_preds)
 
-    print("\n=== SIAMESE DNN VALIDATION EVALUATION ===")
-    print(f"N pairs:    {len(y_v):,}")
-    print(f"Pearson r:  {corr_v:.4f}")
-    print(f"R-squared:  {r2_v:.4f}")
-    print(f"RMSE:       {rmse_v:.4f}")
-    print(f"MAE:        {mae_v:.4f}")
+
 
     if not args.no_plots:
         x = np.asarray(y_v, dtype=float)
@@ -408,29 +407,45 @@ def main(argv=None):
         print(f"Saved validation scatter -> {plot_path}")
 
     # ---- 7. Noise ceiling ----
-    print()
     holdout_target_consistency, n_splithalf_holdout = noise_ceiling(
-        data_root / "holdout_item_correlations_splithalf.parquet", "Holdout (Bainbridge)"
+        data_root / "holdout_item_correlations_splithalf.parquet"
     )
     holdout_noise_ceiling = np.sqrt(holdout_target_consistency)
     holdout_r_noise_aware = corr_h / holdout_noise_ceiling
-    print(f"\nPAIR holdout r = {corr_h:.4f}  |  noise ceiling = {holdout_noise_ceiling:.4f}  |  "
-          f"noise-aware r = {holdout_r_noise_aware:.4f}")
 
-    print()
     validation_target_consistency, n_splithalf_val = noise_ceiling(
-        data_root / "validation_item_correlations_splithalf.parquet", "Validation (SurveyBot3000)"
+        data_root / "validation_item_correlations_splithalf.parquet"
     )
     validation_noise_ceiling = np.sqrt(validation_target_consistency)
     validation_r_noise_aware = corr_v / validation_noise_ceiling
-    print(f"\nPAIR validation r = {corr_v:.4f}  |  noise ceiling = {validation_noise_ceiling:.4f}  |  "
-          f"noise-aware r = {validation_r_noise_aware:.4f}")
 
     # ---- 8. Polarity diagnostic ----
-    print()
-    holdout_polarity = polarity_diagnostic(y_h, h_preds, "Holdout (Bainbridge)")
-    print()
-    val_polarity = polarity_diagnostic(y_v, v_preds, "Validation (SurveyBot3000)")
+    holdout_polarity = polarity_diagnostic(y_h, h_preds)
+    val_polarity = polarity_diagnostic(y_v, v_preds)
+
+    # ---- 8b. Summary tables ----
+    print(f"\n{'':<11s}{'n pairs':>9}  {'r':>6}  {'R2':>6}  {'RMSE':>6}  {'MAE':>6}  "
+          f"{'ceiling':>8}  {'r_adj':>6}")
+    print("-" * 68)
+    for lab, n, r, r2, rm, ma, ceil_, radj in (
+        ("holdout", len(y_h), corr_h, r2_h, rmse_h, mae_h,
+         holdout_noise_ceiling, holdout_r_noise_aware),
+        ("validation", len(y_v), corr_v, r2_v, rmse_v, mae_v,
+         validation_noise_ceiling, validation_r_noise_aware),
+    ):
+        print(f"{lab:<11s}{n:>9,}  {r:>6.4f}  {r2:>6.4f}  {rm:>6.4f}  {ma:>6.4f}  "
+              f"{ceil_:>8.4f}  {radj:>6.4f}")
+    print("r_adj = r / noise ceiling (sqrt of split-half target consistency)")
+
+    print(f"\n{'polarity':<11s}{'neg pairs':>10}{'pos pairs':>11}  "
+          f"{'mean pred|neg':>14}  {'sign concord (neg/pos/all)':>28}")
+    print("-" * 68)
+    for lab, y_t, pol in (("holdout", y_h, holdout_polarity),
+                          ("validation", y_v, val_polarity)):
+        print(f"{lab:<11s}{int((y_t < 0).sum()):>10,}{int((y_t > 0).sum()):>11,}  "
+              f"{pol['mean_pred_given_neg']:>14.4f}  "
+              f"{pol['sign_concordance_neg']:>8.1%} /{pol['sign_concordance_pos']:>7.1%} /"
+              f"{pol['sign_concordance_all']:>7.1%}")
 
     # ---- 9. Log to performance logbook ----
     if not args.no_log:
@@ -485,8 +500,7 @@ def main(argv=None):
         ws.append(row)
         wb.save(logbook_path)
 
-        print(f"\nLogged evaluation to {logbook_path}")
-        print(f"  {args.emb_model} | holdout r={corr_h:.4f} | validation r={corr_v:.4f}")
+        print(f"\nlogged -> {logbook_path}")
 
     return {
         "holdout": {"n": len(y_h), "r": corr_h, "r2": r2_h, "rmse": rmse_h, "mae": mae_h,
