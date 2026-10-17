@@ -22,3 +22,6 @@ build/
 dist/
 .piptmp/
 *.svg
+tmp*
+*.png
+*.npy
