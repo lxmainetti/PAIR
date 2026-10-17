@@ -2,7 +2,7 @@
 
 A pipeline (and pip-installable inference package) that predicts the pairwise correlation between any two psychometric items directly from their wording. It's built on text embeddings from a swappable backbone (Qwen3-Embedding-8B by default) and a Siamese DNN trained end-to-end on aggregated open-access survey data.
 
-Given just the *text* of two scale items, the model recovers their empirical inter-item correlation with **Pearson r ≈ 0.87** on out-of-training items from familiar scale families (holdout), and **r ≈ 0.80** on entirely unseen scales it never encountered during training (validation — SurveyBot study, AAID + BFI-10). Noise-ceiling-adjusted (see [Backbone comparison](#-backbone-comparison) below), that's **r ≈ 0.91** holdout / **r ≈ 0.82** validation.
+Given just the *text* of two scale items, the model recovers their empirical inter-item correlation with **Pearson r ≈ 0.87** on out-of-training items from familiar scale families (holdout), and **r ≈ 0.77** on entirely unseen scales it never encountered during training (validation — SurveyBot3000 validation study). Noise-ceiling-adjusted (see [Backbone comparison](#-backbone-comparison) below), that's **r ≈ 0.91** holdout / **r ≈ 0.80** validation.
 
 > **Architecture note:** earlier versions fed the model a large auxiliary feature block — transformer cross-encoder scores (NLI, reranker similarity, pair sentiment) and per-item sentiment/emotion classifications, plus an autoencoder-compressed embedding space. Permutation-importance analysis showed none of it added meaningfully over the raw embeddings, so the pipeline was simplified to **raw embeddings + `global_sim`** (cosine similarity between the two items' full embeddings) only. See [Retired stages](#-retired-stages).
 
@@ -33,6 +33,10 @@ corrs = pair.predict(pairs=my_df.select(["item_text1", "item_text2"]))
 corrs = pair.predict(items, model="intfloat/e5-mistral-7b-instruct")
 corrs = pair.predict(items, model="Qwen/Qwen3-Embedding-8B", quantize=8)
 
+# no GPU: embed new items via the DeepInfra API instead of locally -- same
+# Qwen3-Embedding-8B weights, same checkpoint (needs DEEPINFRA_API_KEY)
+corrs = pair.predict(items, backend="deepinfra")
+
 # two-step, for reuse: embed once, cache to disk, predict many times without
 # re-embedding
 emb = pair.embed(items, model="text-embedding-3-small", backend="api")
@@ -48,13 +52,15 @@ corrs = pair.predict(pairs=my_pairs, embeddings=emb, model="text-embedding-3-sma
 
 ## 📈 Backbone comparison
 
-All backbones trained on the same 2,843-item training pool, same splits, same architecture (`encoder_dims=(384,)`, `head_dims=(256, 130)`, dropout 0.226). `holdout` = Bainbridge mega-study (item-disjoint, same scale families as training, N=87,153 pairs); `validation` = SurveyBot study (entirely unseen scales, N=33,670 pairs). Noise-aware r divides raw r by a split-half-derived noise ceiling on the human target itself — see `model_validation.py`'s `noise_ceiling()`.
+All backbones trained on the same 2,843-item training pool, same splits, same architecture (`encoder_dims=(384,)`, `head_dims=(256, 130)`, dropout 0.226). `holdout` = Bainbridge mega-study (item-disjoint, same scale families as training, N=87,153 pairs); `validation` = SurveyBot study (entirely unseen scales, N=31,125 pairs). Noise-aware r divides raw r by a split-half-derived noise ceiling on the human target itself — see `model_validation.py`'s `noise_ceiling()`.
+
+The Qwen3-Embedding-8B (default) row is re-benchmarked on the corrected integration data (missing-answer codes recoded to NA, apostrophe items restored — see [Pipeline](#-pipeline)); the other rows are from the earlier data version and not re-run yet. Single runs vary by roughly ±0.01 (validation r) with seed and outer-val split, so differences of that size between rows are not meaningful.
 
 | Backbone | Emb. dim | Holdout r | Holdout r (noise-aware) | Validation r | Validation r (noise-aware) |
 |---|---|---|---|---|---|
 | intfloat/e5-mistral-7b-instruct | 4096 | 0.884 | 0.923 | 0.763 | 0.786 |
 | tencent/KaLM-Embedding-Gemma3-12B-2511 | 3840 | 0.877 | 0.916 | 0.800 | 0.825 |
-| **Qwen/Qwen3-Embedding-8B (default)** | 4096 | 0.868 | 0.906 | 0.797 | 0.822 |
+| **Qwen/Qwen3-Embedding-8B (default)** | 4096 | 0.872 | 0.910 | 0.774 | 0.797 |
 | text-embedding-3-large (OpenAI) | 3072 | 0.862 | 0.900 | 0.693 | 0.714 |
 | Qwen/Qwen3-Embedding-8B (4-bit) | 4096 | 0.861 | 0.899 | 0.769 | 0.792 |
 | Qwen/Qwen3-Embedding-8B (8-bit) | 4096 | 0.853 | 0.890 | 0.749 | 0.771 |
@@ -65,7 +71,7 @@ All backbones trained on the same 2,843-item training pool, same splits, same ar
 | nomic-ai/nomic-embed-text-v2-moe | 768 | 0.757 | 0.790 | 0.546 | 0.562 |
 | sentence-transformers/all-MiniLM-L6-v2 | 384 | 0.655 | 0.684 | 0.315 | 0.325 |
 
-Qwen3-Embedding-8B ships as the default backbone (local inference, no API dependency, strong validation-set generalization). A few other backbones (`intfloat-e5-large-v2`, `dwulff-mpnet-personality`, `sentence-transformers-all-mpnet-base-v2`, `nvidia-Nemotron-3-Embed-8B-BF16`, plus the 4-bit e5-mistral/Qwen3-4B variants) have trained checkpoints under `models/` but haven't been re-benchmarked against the current pipeline yet.
+Qwen3-Embedding-8B ships as the default backbone (runs locally via HF, or without a GPU via the DeepInfra API — both use the same checkpoint; strong validation-set generalization). A few other backbones (`intfloat-e5-large-v2`, `dwulff-mpnet-personality`, `sentence-transformers-all-mpnet-base-v2`, `nvidia-Nemotron-3-Embed-8B-BF16`, plus the 4-bit e5-mistral/Qwen3-4B variants) have trained checkpoints under `models/` but haven't been re-benchmarked against the current pipeline yet.
 
 Full run-by-run history lives in `performance_logbook.xlsx` (one row appended per `model_validation.py` run).
 
@@ -82,8 +88,8 @@ Full run-by-run history lives in `performance_logbook.xlsx` (one row appended pe
 
 Each stage reads from disk and writes to disk, so any stage can be re-run in isolation.
 
-1. **Data integration** (`code/data_prep/data_integration.R`) — parses ~32 heterogeneous open-access scales (CSV/TSV/SAV/RDS + codebooks), computes per-scale inter-item correlations (plus split-half correlations for the noise-ceiling calculation), and writes unified training/holdout/validation parquet files to `data/raw/`.
-2. **Embedding generation** (`code/data_prep/embed_items.py`, backends in `helper_functions/embedding_functions.py`) — embeds every unique item via a local HF/sentence-transformers model, a local Ollama model, or the OpenAI/Google APIs. Writes an item-keyed embedding parquet per split, plus `embedding_meta.json` under `models/<backbone>/` describing exactly how to re-embed new items later.
+1. **Data integration** (`code/data_prep/data_integration.R`) — parses ~32 heterogeneous open-access scales (CSV/TSV/SAV/RDS + codebooks), recodes missing-answer codes (0 / -1 in the OpenPsychometrics files) to NA, computes per-scale inter-item correlations (plus split-half correlations for the noise-ceiling calculation), and writes unified training/holdout/validation parquet files to `data/raw/` — plus `validation_scales.parquet` (subscale membership + keys of the validation items, for scale- and alpha-level evaluation).
+2. **Embedding generation** (`code/data_prep/embed_items.py`, backends in `helper_functions/embedding_functions.py`) — embeds every unique item via a local HF/sentence-transformers model, a local Ollama model, or the OpenAI/Google/DeepInfra APIs. DeepInfra serves the same open-weight models as the HF backend (e.g. Qwen3-Embedding-8B, with the same instruction prompt), so both write to the same `data/raw/<backbone>/` and `models/<backbone>/` folder. Writes an item-keyed embedding parquet per split, plus `embedding_meta.json` under `models/<backbone>/` describing exactly how to re-embed new items later.
 3. **Training** (`code/modelling/model_training.py`) — fits the Siamese DNN end-to-end on raw embeddings + `global_sim`, saves the best checkpoint (by outer-val RMSE) plus the fitted `QuantileTransformer` and architecture metadata to `models/<backbone>/`.
 4. **Evaluation** (`code/modelling/model_validation.py`) — scores a checkpoint on holdout + validation, computes the split-half noise ceiling and noise-aware r, runs a polarity/sign-concordance diagnostic, and appends a row to `performance_logbook.xlsx`.
 
@@ -93,6 +99,7 @@ Each stage reads from disk and writes to disk, so any stage can be re-run in iso
 from train import train
 model_safe = train("Qwen/Qwen3-Embedding-8B")                          # embed -> train -> validate
 model_safe = train("Qwen/Qwen3-Embedding-8B", quantize=8)              # 8-bit backbone
+model_safe = train("Qwen/Qwen3-Embedding-8B", backend="api", provider="deepinfra")  # embed via DeepInfra
 model_safe = train("intfloat/e5-mistral-7b-instruct", skip_embed=True) # reuse existing embeddings
 ```
 
@@ -113,7 +120,7 @@ Two instruments (Rosenberg Self-Esteem, Short Dark Triad) enter the pool from tw
 The two out-of-training splits:
 
 - **Item holdout** (hyperparameter tuning): wave 2 of the **Bainbridge** mega-study — 21 instruments, 418 items, 87,153 pairs. Item-disjoint from training, but 9 of its 21 instruments also appear in the training pool via wave 1, so scale families overlap.
-- **Scale generalization** (out-of-sample estimate): the **SurveyBot3000** validation study — 21 instruments, 260 items, 33,670 pairs, with zero item overlap with the training pool.
+- **Scale generalization** (out-of-sample estimate): the **SurveyBot3000** validation study — 21 instruments, 250 items, 31,125 pairs, with zero item overlap with the training pool.
 
 ## 🧪 Retired stages
 
@@ -122,6 +129,13 @@ Built, benchmarked, then removed because they didn't improve the Siamese model o
 - **Cross-encoder features** — per-pair NLI (entail/contradict/neutral), reranker similarity, pair sentiment, and derived interactions. Permutation importance: ≈0.005 Pearson r over embeddings alone (vs. ≈0.85 when the embedding pathway itself is permuted).
 - **Per-item sentiment/emotion** — 3-class sentiment, 7-class emotion classification per item. Same ablation result.
 - **Autoencoder compression** — a 4096→512 bottleneck used to derive `global_sim` in a compressed space. `global_sim` is now raw cosine similarity computed directly on the full embedding, no compression step.
+
+Also tested and not adopted (validation r within run-to-run noise or worse):
+
+- **Style embeddings** (AnnaWegmann/Style-Embedding, StyleDistance) as an extra similarity feature or concatenated to the item embedding — no holdout gain, validation r −0.005 to −0.017 (style mostly encodes instrument identity, which doesn't transfer to new scales).
+- **Second Qwen3 "views"** with different instructions (keying/polarity, extremity) — no consistent validation gain.
+- **Predicted item difficulty** (ridge regression on embeddings → item mean/SD) as pair features — worse on validation. True item mean/SD (oracle) would add ≈ +0.03 validation r, but difficulty can't be predicted well enough from wording (r ≈ 0.6 for the mean, ≈ 0.2 for the SD).
+- **Calibration** — post-hoc linear (de-)shrinking in Fisher-z and a CCC loss (alone / added to Huber). The Huber model is already calibrated (slope observed~predicted ≈ 0.93 item level, ≈ 0.97 scale level); the visible compression of predictions is regression to the mean that follows from r < 1, not a correctable bias.
 
 ## 🗺️ Repository layout
 
@@ -137,7 +151,7 @@ code/
 ├── data_prep/
 │   ├── data_integration.R
 │   ├── embed_items.py
-│   └── helper_functions/embedding_functions.py   # hf / ollama / api embedding backends
+│   └── helper_functions/embedding_functions.py   # hf / ollama / api (OpenAI, Google, DeepInfra) embedding backends
 └── modelling/
     ├── siamese_model.py             # shared SiameseDNN architecture
     ├── model_training.py
@@ -148,7 +162,7 @@ code/
 
 data/
 ├── scales/                  raw per-scale data + codebooks (see scale_sources.md)
-├── raw/                     integrated train/holdout/validation parquet + per-backbone embedding caches
+├── raw/                     integrated train/holdout/validation parquet, validation_scales.parquet + per-backbone embedding caches
 ├── processed/                intermediate joined tables
 └── clustered_embeddings/    legacy autoencoder-bottleneck tables (retired stage, kept for reference)
 
