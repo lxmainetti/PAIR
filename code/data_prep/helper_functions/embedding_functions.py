@@ -12,6 +12,7 @@ filename-safe model id back (the R version shared this via ``<<-``).
 """
 
 import os
+import random
 import time
 
 import numpy as np
@@ -106,25 +107,52 @@ def get_embeddings_API(item_list, model="text-embedding-3-large", provider="open
     print(f"Starting {provider} embedding for {len(items)} items...")
     embeddings_list = []
 
-    def _post_with_retry(url, *, json_body, headers=None, params=None, max_tries=3):
+    def _post_with_retry(url, *, json_body, headers=None, params=None, max_tries=6):
+        """POST with backoff on the errors that are actually transient.
+
+        429 (rate limit / quota) and 5xx are retried with exponential backoff and
+        jitter, honouring a Retry-After header when the API sends one. Every other
+        4xx means the request itself is wrong (bad model id, bad dims, missing or
+        unauthorised key) -- retrying identical bad input cannot help, so those
+        fail immediately with the API's own error message rather than burning
+        attempts and hiding what went wrong.
+        """
         last_err = None
-        for _ in range(max_tries):
+        for attempt in range(max_tries):
             resp = requests.post(url, json=json_body, headers=headers, params=params)
             if resp.status_code < 400:
                 return resp
-            # 4xx = the request itself is wrong (bad model/dims/key/etc.) -- retrying
-            # identical bad input won't help, so fail immediately with the API's own
-            # error message instead of burning attempts and hiding what went wrong.
-            if resp.status_code < 500:
-                raise requests.HTTPError(
-                    f"{resp.status_code} Client Error: {resp.text}", response=resp
+
+            if resp.status_code == 429 or resp.status_code >= 500:
+                kind = "Rate limit" if resp.status_code == 429 else "Server error"
+                last_err = requests.HTTPError(
+                    f"{resp.status_code} {kind}: {resp.text}", response=resp
                 )
-            last_err = requests.HTTPError(f"{resp.status_code} Server Error: {resp.text}", response=resp)
+                if attempt == max_tries - 1:
+                    break
+                retry_after = resp.headers.get("Retry-After")
+                try:
+                    wait = float(retry_after)
+                except (TypeError, ValueError):
+                    wait = min(2 ** attempt, 60) + random.random()
+                print(f"  {kind} ({resp.status_code}); retrying in {wait:.1f}s "
+                      f"[attempt {attempt + 1}/{max_tries}]")
+                time.sleep(wait)
+                continue
+
+            raise requests.HTTPError(
+                f"{resp.status_code} Client Error: {resp.text}", response=resp
+            )
         raise last_err
 
     # ---- OpenAI ----
     if provider == "openai":
         api_key = os.getenv("OPENAI_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "OPENAI_API_KEY is not set. Without it the request is sent unauthenticated "
+                "and the API replies with an opaque 401/403."
+            )
 
         body_list = {"model": model}
         # Only embedding-3 generation supports tunable output dims
@@ -154,7 +182,13 @@ def get_embeddings_API(item_list, model="text-embedding-3-large", provider="open
     if provider == "google":
         from concurrent.futures import ThreadPoolExecutor
 
-        api_key = os.environ.get("GOOGLE_API_KEY", "")
+        api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+        if not api_key:
+            raise RuntimeError(
+                "Neither GEMINI_API_KEY nor GOOGLE_API_KEY is set. An empty key is still "
+                "sent as key=, and the API answers PERMISSION_DENIED -- which reads like a "
+                "bad model id rather than a missing credential."
+            )
         task_pfx = "task: sentence similarity | query: "
         # Gemini batchEmbedContents tops out at 100 inputs per request
         batches = [items[i:i + 100] for i in range(0, len(items), 100)]
@@ -172,7 +206,10 @@ def get_embeddings_API(item_list, model="text-embedding-3-large", provider="open
             )
             return [np.asarray(e["values"], dtype=float) for e in resp.json()["embeddings"]]
 
-        with ThreadPoolExecutor(max_workers=10) as pool:  # tune to your rate limit
+        # 4 workers rather than 10: with 100 items per request, 10 in flight is enough
+        # to trip the per-minute quota on a single split, and the next split then opens
+        # against an already-drained bucket. _post_with_retry backs off if it happens.
+        with ThreadPoolExecutor(max_workers=4) as pool:  # tune to your rate limit
             for batch_results in pool.map(_embed_batch, batches):
                 embeddings_list.extend(batch_results)
 
@@ -223,6 +260,9 @@ def get_embeddings_HF(item_list, model="dwulff/mpnet-personality", instruction=N
         case "Qwen/Qwen3-Embedding-4B":
             instr_mode, instr, needs_eos, padding_side = (
                 "prompt", instruction or psycho_instruct, False, None)
+        case "Qwen/Qwen3-Embedding-0.6B":
+                    instr_mode, instr, needs_eos, padding_side = (
+                        "prompt", instruction or psycho_instruct, False, None)
         case "intfloat/e5-large-v2":
             instr_mode, instr, needs_eos, padding_side = (
                 "prepend", f"Instruct: {instruction or psycho_instruct}\nQuery: ",
