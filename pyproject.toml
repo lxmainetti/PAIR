@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "pair-psychometrics"
 version = "0.1.0"
 description = "PAIR: Predicting Associations of Inter-item Relationships -- Siamese DNN for predicting pairwise item correlations from text embeddings. Inference only, reads checkpoints from a PAIR repo's data/raw + models folders; see the full repo on GitHub for training."
-license = "MIT"
+license = "CC-BY-NC-4.0"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = [

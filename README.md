@@ -183,4 +183,4 @@ Hyperparameters were searched with a standalone Optuna script (`code/modelling/o
 
 ## 📄 License
 
-The code and trained model weights in this repository are released under the MIT License; see [`LICENSE`](LICENSE). The psychometric instruments in the training pool are not part of this repository and remain under their original authors' terms; see [`scale_sources.md`](scale_sources.md).
+The code and trained model weights in this repository are released under [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/) (Creative Commons Attribution-NonCommercial 4.0 International): free to use, share and adapt for non-commercial purposes with attribution; see [`LICENSE`](LICENSE). The psychometric instruments in the training pool are not part of this repository and remain under their original authors' terms; see [`scale_sources.md`](scale_sources.md).
